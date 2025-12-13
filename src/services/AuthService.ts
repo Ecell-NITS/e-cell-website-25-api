@@ -2,9 +2,12 @@ import { Prisma } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import prisma from '../../prisma/client';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
+import { sendEmail } from '../utils/email';
+
 export class AuthService {
   private googleClient: OAuth2Client;
 
@@ -12,20 +15,16 @@ export class AuthService {
     this.googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
   }
 
-  // 1. Verify the token with Google
+  // --- HELPER: Generate 6-Digit OTP ---
+  private generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString(); // e.g. "123456"
+  }
+
+  // ==========================================================
+  //  1. GOOGLE LOGIN (Auto-Verifies User)
+  // ==========================================================
+  
   async verifyGoogleToken(idToken: string) {
-    // --- TEMPORARY MOCK START ---
-    // If the token is "test-token", return a fake user without calling Google for testing purposes
-    /*
-    if (idToken === 'test-token') {
-      return {
-        email: 'testuser@example.com',
-        name: 'Test User',
-        sub: 'google-123456789', // Fake Google ID
-        picture: 'https://via.placeholder.com/150',
-      };
-    }
-    */
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
@@ -43,22 +42,24 @@ export class AuthService {
     }
   }
 
-  // 2. Login or Register the User
   async loginWithGoogle(idToken: string) {
     const payload = await this.verifyGoogleToken(idToken);
 
     // Use a transaction to prevent race conditions
     const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {      
-      let user = await tx.user.findUnique({ where: { googleId: payload.sub } });
-
+      let user = await tx.user.findFirst({ where: { googleId: payload.sub } });
       // Find by Email (Fallback for linking accounts)
       if (!user) {
         user = await tx.user.findUnique({ where: { email: payload.email } });
         if (user) {
-          // Link the Google ID to the existing email account
+          // Link Account & Auto-Verify since Google is trusted
           user = await tx.user.update({
             where: { id: user.id },
-            data: { googleId: payload.sub, picture: payload.picture },
+            data: { 
+              googleId: payload.sub, 
+              picture: payload.picture,
+              isVerified: true // Trust Google
+            },
           });
         }
       }
@@ -67,41 +68,164 @@ export class AuthService {
       if (!user) {
         user = await tx.user.create({
           data: {
-            email: payload.email!, // We checked email exists above
+            email: payload.email!, 
             name: payload.name,
             googleId: payload.sub,
             picture: payload.picture,
             role: 'USER',
+            isVerified: true // Trust Google
           },
         });
       }
       return user;
     });
 
-    // Generate tokens
     const tokens = await this.generateTokens(user.id, user.role);
     return { user, ...tokens };
   }
 
-  // 3. Generate Access (Short) and Refresh (Long) Tokens
+  // ==========================================================
+  //  2. EMAIL & PASSWORD LOGIC (OTP SYSTEM)
+  // ==========================================================
+
+  // --- Register (Step 1: Create User & Send OTP) ---
+  async register(data: any) {
+    const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existingUser) throw new AppError('Email already in use', 400);
+
+    const hashedPassword = await bcrypt.hash(data.password, 12);
+    
+    // Generate OTP
+    const otp = this.generateOTP();
+
+    //console.log("DEV OTP (Register):", otp); // <--- Add this
+
+
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    // Create User (Unverified)
+    await prisma.user.create({
+      data: {
+        email: data.email,
+        password: hashedPassword,
+        name: data.name,
+        role: 'USER',
+        isVerified: false, // <--- BLOCKS LOGIN
+        otp,
+        otpExpires
+      },
+    });
+
+    // Send Email
+    await sendEmail({
+      email: data.email,
+      subject: 'Verify your E-Cell Account',
+      message: `Welcome to E-Cell! Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+    });
+
+    return { message: 'OTP sent to email. Please verify to login.' };
+  }
+
+  // --- Verify Email (Step 2: Check OTP & Activate) ---
+  async verifyEmail(email: string, otp: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user || user.otp !== otp || !user.otpExpires || user.otpExpires < new Date()) {
+      throw new AppError('Invalid or expired OTP', 400);
+    }
+
+    // Activate User & Clear OTP
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { isVerified: true, otp: null, otpExpires: null }
+    });
+
+    // Auto-login after verification
+    const tokens = await this.generateTokens(updatedUser.id, updatedUser.role);
+    return { user: updatedUser, ...tokens };
+  }
+
+  // --- Login (Enforce Verification) ---
+  async login(email: string, password: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+      throw new AppError('Incorrect email or password', 401);
+    }
+
+    // BLOCK LOGIN IF NOT VERIFIED
+    if (!user.isVerified) {
+      throw new AppError('Email not verified. Please verify your account first.', 403);
+    }
+
+    const tokens = await this.generateTokens(user.id, user.role);
+    return { user, ...tokens };
+  }
+
+  // --- Forgot Password (Step 1: Send OTP) ---
+  async forgotPassword(email: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return; // Silent success to prevent enumeration
+
+    const otp = this.generateOTP();
+
+   // console.log(" DEV OTP (Forgot Password):", otp); 
+
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { otp, otpExpires },
+    });
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Reset Password Code',
+        message: `Your password reset code is: ${otp}\n\nDo not share this code with anyone.`,
+      });
+    } catch (err) {
+        // Rollback on error
+        await prisma.user.update({ where: { id: user.id }, data: { otp: null, otpExpires: null }});
+        throw new AppError("Could not send email", 500);
+    }
+  }
+
+  // --- Reset Password (Step 2: Verify OTP & Change Pass) ---
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user || user.otp !== otp || !user.otpExpires || user.otpExpires < new Date()) {
+      throw new AppError('Invalid or expired OTP', 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        otp: null,
+        otpExpires: null,
+      },
+    });
+  }
+
+  // ==========================================================
+  //  SHARED HELPERS (TOKENS & LOGOUT)
+  // ==========================================================
+
   private async generateTokens(userId: string, role: string) {
     const accessToken = jwt.sign(
       { userId, role },
-      env.JWT_ACCESS_SECRET as string, // Ensure secret is treated as string
-      { 
-        // Cast this to 'any' or specific string to satisfy the library strictness
-        expiresIn: env.JWT_ACCESS_EXPIRY as any 
-      } 
+      env.JWT_ACCESS_SECRET as string, 
+      { expiresIn: env.JWT_ACCESS_EXPIRY as any } 
     );
 
-    // Generate a random refresh token (Better security than JWT for refresh)
     const refreshToken = crypto.randomBytes(40).toString('hex');
-    
-    // Calculate expiry (7 days from now)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Save to DB
     await prisma.refreshToken.create({
       data: { token: refreshToken, userId, expiresAt },
     });
@@ -109,7 +233,6 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // 4. Refresh Token Rotation (Security Best Practice)
   async refreshAccessToken(incomingToken: string) {
     const tokenRecord = await prisma.refreshToken.findUnique({
       where: { token: incomingToken },
@@ -118,22 +241,18 @@ export class AuthService {
 
     if (!tokenRecord) throw new AppError('Invalid Refresh Token', 401);
     
-    // Security: Reuse Detection
     if (tokenRecord.revoked) {
-      // Nuke all tokens for this user if we detect theft
       await prisma.refreshToken.updateMany({
         where: { userId: tokenRecord.userId },
         data: { revoked: true },
       });
-      throw new AppError('Security Warning: Token reuse detected. Please login again.', 403);
+      throw new AppError('Security Warning: Token reuse detected.', 403);
     }
 
-    // Check Expiry
     if (new Date() > tokenRecord.expiresAt) {
       throw new AppError('Refresh token expired', 401);
     }
 
-    // Rotate: Revoke old token, issue new one
     await prisma.refreshToken.update({
       where: { id: tokenRecord.id },
       data: { revoked: true, replacedByToken: 'rotated' },
@@ -142,7 +261,6 @@ export class AuthService {
     return this.generateTokens(tokenRecord.userId, tokenRecord.user.role);
   }
 
-  // 5. Logout
   async logout(token: string) {
     await prisma.refreshToken.update({
       where: { token },

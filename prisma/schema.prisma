@@ -16,15 +16,20 @@ model User {
   password  String?  
   role      Role     @default(USER)
 
-
-  isVerified   Boolean   @default(false) // <--- NEW: Blocks login until verified
-  otp          String?   // <--- Stores the 6-digit code
+  isVerified   Boolean   @default(false) 
+  otp          String?   
   otpExpires   DateTime?
 
+  // 👇 ADDED MISSING PROFILE FIELDS (Optional)
+  bio        String?
+  linkedin   String?
+  github     String?
+  instagram  String?
+  facebook   String?
 
   passwordResetToken   String?
   passwordResetExpires DateTime?
-  refreshTokens RefreshToken[]
+  refreshTokens        RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -40,7 +45,7 @@ model RefreshToken {
   
   expiresAt DateTime
   revoked   Boolean  @default(false)
-  replacedByToken String? // Critical for Reuse Detection (Security)
+  replacedByToken String? 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

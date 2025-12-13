@@ -17,7 +17,7 @@ export class AuthService {
 
   // --- HELPER: Generate 6-Digit OTP ---
   private generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString(); // e.g. "123456"
+    return Math.floor(100000 + Math.random() * 900000).toString(); 
   }
 
   // ==========================================================
@@ -45,26 +45,23 @@ export class AuthService {
   async loginWithGoogle(idToken: string) {
     const payload = await this.verifyGoogleToken(idToken);
 
-    // Use a transaction to prevent race conditions
     const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {      
       let user = await tx.user.findFirst({ where: { googleId: payload.sub } });
-      // Find by Email (Fallback for linking accounts)
+      
       if (!user) {
         user = await tx.user.findUnique({ where: { email: payload.email } });
         if (user) {
-          // Link Account & Auto-Verify since Google is trusted
           user = await tx.user.update({
             where: { id: user.id },
             data: { 
               googleId: payload.sub, 
               picture: payload.picture,
-              isVerified: true // Trust Google
+              isVerified: true 
             },
           });
         }
       }
 
-      // Create new user if doesn't exist
       if (!user) {
         user = await tx.user.create({
           data: {
@@ -73,7 +70,7 @@ export class AuthService {
             googleId: payload.sub,
             picture: payload.picture,
             role: 'USER',
-            isVerified: true // Trust Google
+            isVerified: true 
           },
         });
       }
@@ -88,45 +85,42 @@ export class AuthService {
   //  2. EMAIL & PASSWORD LOGIC (OTP SYSTEM)
   // ==========================================================
 
-  // --- Register (Step 1: Create User & Send OTP) ---
   async register(data: any) {
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) throw new AppError('Email already in use', 400);
 
     const hashedPassword = await bcrypt.hash(data.password, 12);
-    
-    // Generate OTP
     const otp = this.generateOTP();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); 
 
-    //console.log("DEV OTP (Register):", otp); // <--- Add this
-
-
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-
-    // Create User (Unverified)
     await prisma.user.create({
       data: {
         email: data.email,
         password: hashedPassword,
         name: data.name,
         role: 'USER',
-        isVerified: false, // <--- BLOCKS LOGIN
+        isVerified: false,
         otp,
-        otpExpires
+        otpExpires,
+        // Profile Fields
+        bio: data.bio,
+        picture: data.picture,
+        linkedin: data.linkedin,
+        github: data.github,
+        instagram: data.instagram,
+        facebook: data.facebook
       },
     });
 
-    // Send Email
     await sendEmail({
       email: data.email,
       subject: 'Verify your E-Cell Account',
-      message: `Welcome to E-Cell! Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+      message: `Your verification code is: ${otp}`,
     });
 
     return { message: 'OTP sent to email. Please verify to login.' };
   }
 
-  // --- Verify Email (Step 2: Check OTP & Activate) ---
   async verifyEmail(email: string, otp: string) {
     const user = await prisma.user.findUnique({ where: { email } });
     
@@ -134,18 +128,15 @@ export class AuthService {
       throw new AppError('Invalid or expired OTP', 400);
     }
 
-    // Activate User & Clear OTP
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { isVerified: true, otp: null, otpExpires: null }
     });
 
-    // Auto-login after verification
     const tokens = await this.generateTokens(updatedUser.id, updatedUser.role);
     return { user: updatedUser, ...tokens };
   }
 
-  // --- Login (Enforce Verification) ---
   async login(email: string, password: string) {
     const user = await prisma.user.findUnique({ where: { email } });
     
@@ -153,7 +144,6 @@ export class AuthService {
       throw new AppError('Incorrect email or password', 401);
     }
 
-    // BLOCK LOGIN IF NOT VERIFIED
     if (!user.isVerified) {
       throw new AppError('Email not verified. Please verify your account first.', 403);
     }
@@ -162,16 +152,12 @@ export class AuthService {
     return { user, ...tokens };
   }
 
-  // --- Forgot Password (Step 1: Send OTP) ---
   async forgotPassword(email: string) {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return; // Silent success to prevent enumeration
+    if (!user) return; 
 
     const otp = this.generateOTP();
-
-   // console.log(" DEV OTP (Forgot Password):", otp); 
-
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); 
 
     await prisma.user.update({
       where: { id: user.id },
@@ -182,16 +168,14 @@ export class AuthService {
       await sendEmail({
         email: user.email,
         subject: 'Reset Password Code',
-        message: `Your password reset code is: ${otp}\n\nDo not share this code with anyone.`,
+        message: `Your password reset code is: ${otp}`,
       });
     } catch (err) {
-        // Rollback on error
         await prisma.user.update({ where: { id: user.id }, data: { otp: null, otpExpires: null }});
         throw new AppError("Could not send email", 500);
     }
   }
 
-  // --- Reset Password (Step 2: Verify OTP & Change Pass) ---
   async resetPassword(email: string, otp: string, newPassword: string) {
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -203,16 +187,103 @@ export class AuthService {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        otp: null,
-        otpExpires: null,
-      },
+      data: { password: hashedPassword, otp: null, otpExpires: null },
     });
   }
 
   // ==========================================================
-  //  SHARED HELPERS (TOKENS & LOGOUT)
+  //  3. NEW FEATURES
+  // ==========================================================
+
+  async resendOTP(email: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) throw new AppError('User not found', 404);
+    
+    const otp = this.generateOTP();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.user.update({ where: { id: user.id }, data: { otp, otpExpires } });
+    await sendEmail({ email: user.email, subject: 'New Verification Code', message: `Your new code is: ${otp}` });
+  }
+
+  async updateProfile(userId: string, data: any) {
+    const allowedUpdates = {
+      name: data.name,
+      bio: data.bio,
+      picture: data.picture,
+      linkedin: data.linkedin,
+      github: data.github,
+      instagram: data.instagram,
+      facebook: data.facebook
+    };
+
+    Object.keys(allowedUpdates).forEach(key => 
+      (allowedUpdates as any)[key] === undefined && delete (allowedUpdates as any)[key]
+    );
+
+    return await prisma.user.update({
+      where: { id: userId },
+      data: allowedUpdates,
+    });
+  }
+
+  async getPublicProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, 
+        name: true, 
+        bio: true, 
+        picture: true,
+        linkedin: true, 
+        github: true, 
+        instagram: true, // ✅ Comma added here
+        facebook: true,  // ✅ Comma added here
+        role: true
+      }
+    });
+    if (!user) throw new AppError('User not found', 404);
+    return user;
+  }
+
+  async updatePassword(userId: string, currentPass: string, newPass: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.password) throw new AppError('User not found', 404);
+
+    const isMatch = await bcrypt.compare(currentPass, user.password);
+    if (!isMatch) throw new AppError('Current password is incorrect', 401);
+
+    const hashedPassword = await bcrypt.hash(newPass, 12);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+  }
+
+  async deleteAccount(userId: string, reason: string) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        email: `deleted_${userId}_${Date.now()}@deleted.com`,
+        name: 'Deleted User',
+        isVerified: false,
+        bio: `Account Deleted. Reason: ${reason}`
+      }
+    });
+  }
+
+  async getAllUsers() {
+    return await prisma.user.findMany({
+      select: { id: true, name: true, email: true, role: true, picture: true }
+    });
+  }
+
+  async changeRole(email: string, newRole: 'ADMIN' | 'USER' | 'SUPERADMIN') {
+    return await prisma.user.update({
+      where: { email },
+      data: { role: newRole }
+    });
+  }
+
+  // ==========================================================
+  //  SHARED HELPERS
   // ==========================================================
 
   private async generateTokens(userId: string, role: string) {

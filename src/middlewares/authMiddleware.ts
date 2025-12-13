@@ -4,7 +4,6 @@ import { env } from '../config/env';
 import prisma from '../../prisma/client';
 import { AppError } from '../utils/AppError';
 
-// ✅ FIX: Added email and name to the interface
 export interface AuthRequest extends Request {
   user?: {
     id: string;
@@ -26,7 +25,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       return next(new AppError('You are not logged in. Please log in to get access.', 401));
     }
 
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { userId: string; role: string };
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET as string) as { userId: string; role: string };
 
     const currentUser = await prisma.user.findUnique({ where: { id: decoded.userId } });
 
@@ -34,7 +33,6 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       return next(new AppError('The user belonging to this token no longer exists.', 401));
     }
 
-    // ✅ FIX: Pass full details (BUT NO PASSWORD) to the controller
     req.user = {
       id: currentUser.id,
       role: currentUser.role,
@@ -51,7 +49,6 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   }
 };
 
-// TODO: Refine admin permissions. 
 export const restrictTo = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {

@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
-    "format": "prettier --write 'src/**/*.{ts,tsx,json,md}'",
+    "format": "prettier --write 'src/**/*.{ts,tsx,json}'",
     "prepare": "husky"
   },
   "keywords": [],
@@ -22,25 +22,25 @@
     "express": "^5.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/express": "^5.0.4",
     "@types/node": "^24.9.1",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "eslint": "^9.38.0",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.4",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.6",
-    "prettier": "^3.6.2",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
     "prisma": "^6.18.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "lint-staged": {
-  "*.{ts,tsx}": [
-    "pnpm lint:fix",
-    "pnpm format"
-  ]
-}
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  }
 }

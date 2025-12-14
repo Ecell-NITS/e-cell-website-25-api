@@ -9,21 +9,20 @@ datasource db {
 
 
 
-// prisma/schema.prisma
+
 
 model Query {
   id      String @id @default(auto()) @map("_id") @db.ObjectId
-  // We can add other fields later (like message, email, etc.)
-  // For this specific route, we only need the ID to delete it.
+  
 }
 
-// prisma/schema.prisma
+
 
 model User {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   email     String    @unique
-  otp       String?   // New field to store the OTP
-  otpExpiry DateTime? // New field to know when OTP expires
+  otp       String?   // store the OTP
+  otpExpiry DateTime? // know when OTP expires
 }
 
 model Blog {
@@ -41,6 +40,6 @@ model Blog {
 
   isAccepted  Boolean  @default(false)
 
-  subject     String?  // Optional initially, filled when publishing
-  text        String?  // Optional initially, filled when publishing
+  subject     String?  
+  text        String?  
 }

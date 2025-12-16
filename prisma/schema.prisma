@@ -13,3 +13,57 @@ model User {
   name      String?
   createdAt DateTime @default(now())
 }
+
+model Blog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  subject   String
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model PublicBlog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  authoruniqueid String
+  blogId         String
+  title          String
+  tag            String
+  intro          String
+  content        String
+  writername     String
+  writerintro    String
+  writerpic      String
+  writeremail    String
+  topicpic       String
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
+}
+
+model Comment {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  postId        String
+  commentAuthor String
+  commentPic    String
+  text          String
+  userId        String
+
+  createdAt     DateTime @default(now())
+}
+
+model Account {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  email         String   @unique
+  password      String
+  bio           String
+  userimg       String
+  facebook      String
+  github        String
+  linkedin      String
+  instagram     String
+  role          String
+  deleteAccount Boolean @default(false)
+  createdAt     DateTime @default(now())
+}
+
+

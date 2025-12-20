@@ -28,4 +28,6 @@ app.use('/api/auth', authRoutes);
 // Global Error Handler (Must be last)
 app.use(errorHandler);
 
+app.get('/version', (_req, res) => res.json({ version: '1.0.0' }));
+
 export default app;

@@ -1,23 +1,23 @@
 import dotenv from 'dotenv';
-import { z } from 'zod';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().default('4000'),
-  DATABASE_URL: z.string(),
-  GOOGLE_CLIENT_ID: z.string(),
-  JWT_ACCESS_SECRET: z.string(),
-  JWT_ACCESS_EXPIRY: z.string().default('15m'),
+export const env = {
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  PORT: process.env.PORT || 4000,
+  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
+  DATABASE_URL: process.env.DATABASE_URL || '',
+  JWT_SECRET: process.env.JWT_SECRET || 'secret',
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   
-  // --- ADD THESE TWO LINES ---
-  EMAIL_USER: z.string().email("EMAIL_USER must be a valid email"),
-  EMAIL_PASS: z.string().min(1, "EMAIL_PASS is required"),
-  // ---------------------------
+  // Google
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
   
-  // Optional: URL for your frontend (used in password reset emails)
-  CLIENT_URL: z.string().default('http://localhost:3000'), 
-});
-
-export const env = envSchema.parse(process.env);
+  // Email
+  EMAIL_HOST: process.env.EMAIL_HOST,
+  EMAIL_PORT: process.env.EMAIL_PORT,
+  EMAIL_USERNAME: process.env.EMAIL_USERNAME,
+  EMAIL_PASSWORD: process.env.EMAIL_PASSWORD,
+};

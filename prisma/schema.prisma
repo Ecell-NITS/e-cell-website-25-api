@@ -20,7 +20,6 @@ model User {
   otp          String?   
   otpExpires   DateTime?
 
-  // 👇 ADDED MISSING PROFILE FIELDS (Optional)
   bio        String?
   linkedin   String?
   github     String?
@@ -57,4 +56,11 @@ enum Role {
   USER
   ADMIN
   SUPERADMIN
+}
+
+model Otp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  otp       String
+  createdAt DateTime @default(now())
 }

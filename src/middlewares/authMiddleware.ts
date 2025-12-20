@@ -1,57 +1,47 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
-import prisma from '../../prisma/client';
+import { PrismaClient, Role } from '@prisma/client'; 
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    role: string;
-    email: string;
-    name: string | null;
-  };
-}
+const prisma = new PrismaClient();
 
-export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
+export const protect = async (req: Request, res: Response, next: NextFunction) => {
     let token;
-    
+    // 1. Check if token exists in headers
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
+        token = req.headers.authorization.split(' ')[1];
     }
-    
+
     if (!token) {
-      return next(new AppError('You are not logged in. Please log in to get access.', 401));
+        return next(new AppError('You are not logged in. Please log in to get access.', 401));
     }
 
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET as string) as { userId: string; role: string };
+    try {
+        
+        const decoded = jwt.verify(token, env.JWT_SECRET) as { id: string; role: string };
 
-    const currentUser = await prisma.user.findUnique({ where: { id: decoded.userId } });
+        // 4. Check if user still exists
+        const currentUser = await prisma.user.findUnique({ where: { id: decoded.id } });
+        
+        if (!currentUser) {
+            return next(new AppError('The user belonging to this token no longer exists.', 401));
+        }
 
-    if (!currentUser) {
-      return next(new AppError('The user belonging to this token no longer exists.', 401));
+        // 5. Grant Access
+        (req as any).user = currentUser;
+        next();
+    } catch (error) {
+        return next(new AppError('Invalid token. Please log in again.', 401));
     }
-
-    req.user = {
-      id: currentUser.id,
-      role: currentUser.role,
-      email: currentUser.email,
-      name: currentUser.name
-    };
-
-    next();
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return next(new AppError('Your token has expired! Please log in again.', 401));
-    }
-    return next(new AppError('Invalid Token. Please log in again.', 401));
-  }
 };
 
-export const restrictTo = (...roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+export const restrictTo = (...roles: Role[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Cast strict type
+    const userRole = (req as any).user.role as Role;
+    
+    if (!roles.includes(userRole)) {
       return next(new AppError('You do not have permission to perform this action', 403));
     }
     next();

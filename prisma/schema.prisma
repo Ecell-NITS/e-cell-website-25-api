@@ -9,22 +9,6 @@ datasource db {
 
 
 
-
-
-model Query {
-  id      String @id @default(auto()) @map("_id") @db.ObjectId
-  
-}
-
-
-
-model User {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  email     String    @unique
-  otp       String?   // store the OTP
-  otpExpiry DateTime? // know when OTP expires
-}
-
 model Blog {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   title       String
@@ -40,6 +24,70 @@ model Blog {
 
   isAccepted  Boolean  @default(false)
 
-  subject     String?  
-  text        String?  
+  subject     String?
+  text        String?
+}
+
+model Query {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+}
+
+
+
+enum Role {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  name      String?
+  picture   String?
+  googleId  String?
+  password  String?
+  role      Role     @default(USER)
+
+  isVerified  Boolean  @default(false)
+  otp         String?
+  otpExpires  DateTime?  
+
+  bio         String?
+  linkedin    String?
+  github      String?
+  instagram   String?
+  facebook    String?
+
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  refreshTokens        RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  token       String   @unique
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  replacedByToken String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("refresh_tokens")
+}
+
+model Otp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  otp       String
+  createdAt DateTime @default(now())
 }

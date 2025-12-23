@@ -1,21 +1,20 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { createBlogSchema } from '../validators/blog.validators';
+import { createApiBlogSchema } from '../validators/blog.validators';
 
 export const createBlog = async (req: Request, res: Response) => {
   try {
-    const { email, subject, text } = req.body;
-
-    if (!email || !subject || !text) {
-      return res.status(400).json({
-        message: 'email, subject and text are required',
-      });
-    }
+    const validatedData = createBlogSchema.parse(req.body);
 
     const blog = await prisma.blog.create({
-      data: {
-        email,
-        subject,
-        text,
+      data: validatedData,
+      select: {
+        id: true,
+        email: true,
+        subject: true,
+        text: true,
+        createdAt: true,
       },
     });
 
@@ -23,11 +22,15 @@ export const createBlog = async (req: Request, res: Response) => {
       message: 'Blog created successfully',
       data: blog,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return res.status(400).json({
+        message: error.errors[0].message,
+      });
+    }
+
     console.error(error);
-    return res.status(500).json({
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -41,17 +44,30 @@ export const myPublishedBlogs = async (req: Request, res: Response) => {
       });
     }
 
-    const blogs = await prisma.blog.findMany({
-      where: {
-        email: email,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const page = 1;
+    const limit = 2;
+    const skip = (page - 1) * limit;
+
+    const [blogs, total] = await Promise.all([
+      prisma.blog.findMany({
+        where: { email },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.blog.count({
+        where: { email },
+      }),
+    ]);
 
     return res.status(200).json({
       message: 'Blogs fetched successfully',
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
       data: blogs,
     });
   } catch (error) {
@@ -71,17 +87,31 @@ export const publicWrittenBlog = async (req: Request, res: Response) => {
         message: 'authoruniqueid is required',
       });
     }
-    const blogs = await prisma.publicBlog.findMany({
-      where: {
-        authoruniqueid,
-      },
-      orderBy: {
-        timestamp: 'desc',
-      },
-    });
+
+    const page = 1;
+    const limit = 2;
+    const skip = (page - 1) * limit;
+
+    const [blogs, total] = await Promise.all([
+      prisma.publicBlog.findMany({
+        where: { authoruniqueid },
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.publicBlog.count({
+        where: { authoruniqueid },
+      }),
+    ]);
 
     return res.status(200).json({
       message: 'Public written blogs fetched successfully',
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
       data: blogs,
     });
   } catch (error) {
@@ -102,17 +132,30 @@ export const tagSpecificBlogList = async (req: Request, res: Response) => {
       });
     }
 
-    const blogs = await prisma.publicBlog.findMany({
-      where: {
-        tag: tagName,
-      },
-      orderBy: {
-        timestamp: 'desc',
-      },
-    });
+    const page = 1;
+    const limit = 2;
+    const skip = (page - 1) * limit;
+
+    const [blogs, total] = await Promise.all([
+      prisma.publicBlog.findMany({
+        where: { tag: tagName },
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.publicBlog.count({
+        where: { tag: tagName },
+      }),
+    ]);
 
     return res.status(200).json({
       message: 'Tag specific blogs fetched successfully',
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
       data: blogs,
     });
   } catch (error) {
@@ -125,129 +168,24 @@ export const tagSpecificBlogList = async (req: Request, res: Response) => {
 
 export const createApiBlog = async (req: Request, res: Response) => {
   try {
-    const { blogId } = req.params;
+    const validatedData = createApiBlogSchema.parse(req.body);
 
-    const {
-      authoruniqueid,
-      title,
-      tag,
-      intro,
-      content,
-      topicpic,
-      writername,
-      writerintro,
-      writerpic,
-      writeremail,
-    } = req.body;
-
-    if (
-      !blogId ||
-      !authoruniqueid ||
-      !title ||
-      !tag ||
-      !intro ||
-      !content ||
-      !topicpic ||
-      !writername ||
-      !writerintro ||
-      !writerpic ||
-      !writeremail
-    ) {
-      return res.status(400).json({
-        message: 'All fields are required',
-      });
-    }
-
-    // 🔹 Insert into SAME PublicBlog collection
     const blog = await prisma.publicBlog.create({
-      data: {
-        blogId,
-        authoruniqueid,
-        title,
-        tag,
-        intro,
-        content,
-        topicpic,
-        writername,
-        writerintro,
-        writerpic,
-        writeremail,
-      },
+      data: validatedData,
     });
 
     return res.status(201).json({
       message: 'API blog created successfully',
       data: blog,
     });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: 'Internal server error',
-    });
-  }
-};
-
-export const getApiComments = async (req: Request, res: Response) => {
-  try {
-    const { postId } = req.params;
-
-    if (!postId) {
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
       return res.status(400).json({
-        message: 'postId is required',
+        message: error.errors[0].message,
       });
     }
 
-    const comments = await prisma.comment.findMany({
-      where: {
-        postId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    return res.status(200).json({
-      message: 'Comments fetched successfully',
-      data: comments,
-    });
-  } catch (error) {
     console.error(error);
-    return res.status(500).json({
-      message: 'Internal server error',
-    });
-  }
-};
-
-export const createApiComment = async (req: Request, res: Response) => {
-  try {
-    const { Id } = req.params;
-
-    const { commentAuthor, commentPic, text, userId } = req.body;
-
-    if (!Id || !commentAuthor || !commentPic || !text || !userId) {
-      return res.status(400).json({
-        message: 'All fields are required',
-      });
-    }
-
-    const comment = await prisma.comment.create({
-      data: {
-        postId: Id,
-        commentAuthor,
-        commentPic,
-        text,
-        userId,
-      },
-    });
-
-    return res.status(201).json({
-      message: 'Comment added successfully',
-      data: comment,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };

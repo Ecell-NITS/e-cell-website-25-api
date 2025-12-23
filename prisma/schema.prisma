@@ -1,3 +1,7 @@
+enum Role {
+  ADMIN
+  CLIENT
+}
 generator client {
   provider = "prisma-client-js"
 }
@@ -61,7 +65,7 @@ model Account {
   github        String
   linkedin      String
   instagram     String
-  role          String
+  role          Role    @default(CLIENT) 
   deleteAccount Boolean @default(false)
   createdAt     DateTime @default(now())
 }

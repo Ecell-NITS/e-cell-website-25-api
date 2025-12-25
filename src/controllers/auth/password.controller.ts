@@ -1,10 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { sendEmail } from '../../utils/email';
-import { forgotPassSchema, resetPassSchema, updatePassSchema } from '../../validators/auth.validator';
+import {
+  forgotPassSchema,
+  resetPassSchema,
+  updatePassSchema,
+} from '../../validators/auth.validator';
+import prisma from '../../../prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -92,16 +96,25 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 export const updatePassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { currentPassword, newPassword } = updatePassSchema.parse(req.body);
-    const userId = (req as any).user.id;
+    const userId = (req as Record<string, { id: string }>).user.id;
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
-    if (!user || !(await bcrypt.compare(currentPassword, user.password!))) {
+    if (!user || !user.password) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (!(await bcrypt.compare(currentPassword, user.password!))) {
       throw new AppError('Incorrect current password', 401);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
 
     res.status(200).json({ status: 'success', message: 'Password updated' });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };

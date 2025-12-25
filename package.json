@@ -56,7 +56,7 @@
   "lint-staged": {
     "*.{ts,tsx}": [
       "pnpm lint:fix",
-      "pnpm format"
+      "pnpm format",
       "prettier --write",
       "eslint --fix"
     ]

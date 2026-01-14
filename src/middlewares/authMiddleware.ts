@@ -38,7 +38,6 @@ export const protect = async (
         id: true,
         email: true,
         role: true,
-        isVerified: true,
         createdAt: true,
         updatedAt: true,
       },

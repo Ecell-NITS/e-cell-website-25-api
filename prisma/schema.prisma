@@ -10,25 +10,25 @@ datasource db {
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
-  name      String?
+  name      String
   picture   String?  
-  googleId  String?  
+  
+  // Authentication methods (mutually exclusive in practice)
+  googleId  String?  @unique
   password  String?  
-  role      Role     @default(USER)
+  
+  role      Role     @default(CLIENT)
 
-  isVerified   Boolean   @default(false) 
-  otp          String?   
-  otpExpires   DateTime?
-
+  // Profile fields
   bio        String?
+  position   String?
   linkedin   String?
   github     String?
   instagram  String?
   facebook   String?
 
-  passwordResetToken   String?
-  passwordResetExpires DateTime?
-  refreshTokens        RefreshToken[]
+  // Relations
+  refreshTokens RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -49,11 +49,12 @@ model RefreshToken {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
   @@map("refresh_tokens")
 }
 
 enum Role {
-  USER
+  CLIENT
   ADMIN
   SUPERADMIN
 }
@@ -63,4 +64,8 @@ model Otp {
   email     String
   otp       String
   createdAt DateTime @default(now())
+  
+  @@index([email])
+  @@index([createdAt])
+  @@map("otps")
 }

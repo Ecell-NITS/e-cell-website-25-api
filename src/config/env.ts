@@ -6,6 +6,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET is not defined in environment variables');
 }
+export const JWT_SECRET = process.env.JWT_SECRET;
 
 export const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',

@@ -5,6 +5,7 @@ interface EmailOptions {
   email: string;
   subject: string;
   message: string;
+  html?: string;
 }
 
 export const sendEmail = async (options: EmailOptions) => {
@@ -21,8 +22,10 @@ export const sendEmail = async (options: EmailOptions) => {
   // 2. Define Email Options
   const mailOptions = {
     from: `"E-Cell Support" <${env.EMAIL_USERNAME}>`,
+    to: options.email,
     subject: options.subject,
     text: options.message,
+    html: options.html,
   };
 
   // 3. Send Email

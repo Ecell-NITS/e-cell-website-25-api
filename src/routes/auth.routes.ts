@@ -16,6 +16,7 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 // --- OTP Routes ---
 // User hits this FIRST to get the code
 router.post('/send-otp', sendOtp);
+router.post('/verify-otp', verifyOtp);
 
 // --- Auth Routes ---
 // 1. Register: Middleware verifies OTP first. If valid, controller creates verified user.

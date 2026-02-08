@@ -8,16 +8,18 @@ import {
   resetPassSchema,
   updatePassSchema,
 } from '../../validators/auth.validator';
-import prisma from '../../../prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../utils/prisma';
 
 // 1. FORGOT PASSWORD
-export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { email } = forgotPassSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
-      
+
     // Even if user is not found, we often return 200 for security (prevent email enumeration),
     // logic below only runs if user exists.
     if (user) {
@@ -34,25 +36,37 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
           email,
           otp,
           // createdAt is handled automatically by @default(now()) in schema
-        }
+        },
       });
 
       // 3. Send Email
-      await sendEmail({ email, subject: 'Reset Password', message: `Code: ${otp}` });
+      await sendEmail({
+        email,
+        subject: 'Reset Password',
+        message: `Code: ${otp}`,
+      });
     }
 
-    res.status(200).json({ status: 'success', message: 'If account exists, OTP sent' });
-  } catch (error) { next(error); }
+    res
+      .status(200)
+      .json({ status: 'success', message: 'If account exists, OTP sent' });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // 2. RESET PASSWORD
-export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { email, otp, newPassword } = resetPassSchema.parse(req.body);
 
     // FIX: Verify against OTP Model, NOT User Model
     const otpRecord = await prisma.otp.findFirst({
-      where: { email }
+      where: { email },
     });
 
     if (!otpRecord) {
@@ -79,21 +93,29 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
+      data: {
         password: hashedPassword,
         // No need to clear passwordResetToken/Expires fields from User anymore
-      }
+      },
     });
 
     // Cleanup used OTP
     await prisma.otp.delete({ where: { id: otpRecord.id } });
 
-    res.status(200).json({ status: 'success', message: 'Password reset successful' });
-  } catch (error) { next(error); }
+    res
+      .status(200)
+      .json({ status: 'success', message: 'Password reset successful' });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // 3. UPDATE PASSWORD (Keep as is)
-export const updatePassword = async (req: Request, res: Response, next: NextFunction) => {
+export const updatePassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { currentPassword, newPassword } = updatePassSchema.parse(req.body);
     const userId = (req as Record<string, { id: string }>).user.id;

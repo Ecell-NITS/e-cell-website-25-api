@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { prisma } from '../prisma/client';
-import { sendQuerySchema } from '../schemas/query.schema';
+import prisma from '../utils/prisma';
+import { querySchema } from '../validators/query.validators';
 
 export const sendQuery = async (req: Request, res: Response) => {
-  const parsed = sendQuerySchema.safeParse(req.body);
+  const parsed = querySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json(parsed.error);
   }

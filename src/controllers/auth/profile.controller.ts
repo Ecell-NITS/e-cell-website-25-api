@@ -1,21 +1,39 @@
 import { Request, Response, NextFunction } from 'express';
 import { updateProfileSchema } from '../../validators/auth.validator';
 import { AppError } from '../../utils/AppError';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
 
+/* =======================
+   GET CURRENT USER
+======================= */
 export const getMe = async (req: Request, res: Response) => {
-  res.status(200).json({ status: 'success', data: { user: req.user } });
+  if (!req.user) {
+    throw new AppError('Not authenticated', 401);
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: { user: req.user },
+  });
 };
 
+/* =======================
+   GET PUBLIC PROFILE
+======================= */
 export const getPublicProfile = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // 👇 FIX: Use select to hide sensitive data
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      throw new AppError('Invalid user id', 400);
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -25,22 +43,37 @@ export const getPublicProfile = async (
         github: true,
       },
     });
-    if (!user) throw new AppError('User not found', 404);
-    res.status(200).json({ status: 'success', data: user });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: user,
+    });
   } catch (error) {
     next(error);
   }
 };
 
+/* =======================
+   UPDATE PROFILE
+======================= */
 export const updateProfile = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
+    if (!req.user) {
+      throw new AppError('Not authenticated', 401);
+    }
+
     const data = updateProfileSchema.parse(req.body);
+
     const updatedUser = await prisma.user.update({
-      where: { id: req.user!.id },
+      where: { id: req.user.id },
       data,
       select: {
         id: true,
@@ -56,33 +89,51 @@ export const updateProfile = async (
         updatedAt: true,
       },
     });
-    res.status(200).json({ status: 'success', data: { user: updatedUser } });
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: updatedUser },
+    });
   } catch (error) {
     next(error);
   }
 };
 
+/* =======================
+   DELETE ACCOUNT
+======================= */
 export const deleteAccount = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    await prisma.user.delete({ where: { id: req.user!.id } });
-    res.status(200).json({ status: 'success', message: 'Account deleted' });
+    if (!req.user) {
+      throw new AppError('Not authenticated', 401);
+    }
+
+    await prisma.user.delete({
+      where: { id: req.user.id },
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Account deleted successfully',
+    });
   } catch (error) {
     next(error);
   }
 };
 
-// ADMIN ONLY
+/* =======================
+   ADMIN: GET ALL USERS
+======================= */
 export const getAllUsers = async (
-  req: Request,
+  _req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // 👇 FIX: Use select to return only safe fields
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -92,10 +143,17 @@ export const getAllUsers = async (
         isVerified: true,
         picture: true,
         createdAt: true,
-        // Passwords & OTPs are excluded
+      },
+      orderBy: {
+        createdAt: 'desc',
       },
     });
-    res.status(200).json({ status: 'success', results: users.length, users });
+
+    res.status(200).json({
+      status: 'success',
+      results: users.length,
+      users,
+    });
   } catch (error) {
     next(error);
   }

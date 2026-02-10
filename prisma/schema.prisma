@@ -21,7 +21,7 @@ model User {
   isVerified   Boolean   @default(false) 
   otp          String?   
   otpExpires   DateTime?
-
+  userimg    String?
   bio        String?
   linkedin   String?
   github     String?
@@ -53,6 +53,17 @@ model RefreshToken {
 
   @@map("refresh_tokens")
 }
+
+model Query {
+  id        String   @id @map("_id")  @default(auto()) @db.ObjectId
+  name      String
+  email     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+
 
 enum Role {
   USER

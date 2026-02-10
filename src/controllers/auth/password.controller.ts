@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { env } from '../../config/env';
+
 import { AppError } from '../../utils/AppError';
 import { sendEmail } from '../../utils/email';
 import {
@@ -8,6 +8,14 @@ import {
   resetPassSchema,
   updatePassSchema,
 } from '../../validators/auth.validator';
+import {
+  generateOtp,
+  deletePreviousOtps,
+  createOtp,
+  buildOtpEmailHtml,
+  isOtpExpired,
+} from '../../utils/Otp';
+
 import prisma from '../../utils/prisma';
 
 // 1. FORGOT PASSWORD
@@ -20,32 +28,29 @@ export const forgotPassword = async (
     const { email } = forgotPassSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Even if user is not found, we often return 200 for security (prevent email enumeration),
-    // logic below only runs if user exists.
-    if (user) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      if (env.NODE_ENV === 'development') console.log(`🔥 RESET OTP: ${otp}`);
-
-      // FIX: Use OTP Model instead of User Model
-      // 1. Clear old OTPs for this email
-      await prisma.otp.deleteMany({ where: { email } });
-
-      // 2. Create new OTP entry
-      await prisma.otp.create({
-        data: {
-          email,
-          otp,
-          // createdAt is handled automatically by @default(now()) in schema
-        },
-      });
-
-      // 3. Send Email
-      await sendEmail({
-        email,
-        subject: 'Reset Password',
-        message: `Code: ${otp}`,
+    // Security: do NOT reveal if user exists
+    if (!user) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'If account exists, OTP has been sent',
       });
     }
+    // Even if user is not found, we often return 200 for security (prevent email enumeration),
+    // logic below only runs if user exists.
+
+    const otp = generateOtp();
+
+    await deletePreviousOtps(email);
+    await createOtp(email, otp);
+
+    const html = buildOtpEmailHtml(otp);
+    // 3. Send Email
+    await sendEmail({
+      email,
+      subject: 'Reset your password',
+      message: `Your OTP is ${otp}`,
+      html,
+    });
 
     res
       .status(200)
@@ -79,9 +84,8 @@ export const resetPassword = async (
     }
 
     // Check Expiration (5 minutes)
-    const timeDiff = Date.now() - new Date(otpRecord.createdAt).getTime();
-    if (timeDiff > 5 * 60 * 1000) {
-      await prisma.otp.delete({ where: { id: otpRecord.id } }); // Cleanup expired
+    if (isOtpExpired(otpRecord.createdAt)) {
+      await prisma.otp.delete({ where: { id: otpRecord.id } });
       throw new AppError('OTP expired', 400);
     }
 
@@ -117,9 +121,12 @@ export const updatePassword = async (
   next: NextFunction
 ) => {
   try {
+    if (!req.user) {
+      throw new AppError('Not authenticated', 401);
+    }
+
     const { currentPassword, newPassword } = updatePassSchema.parse(req.body);
-    const userId = (req as Record<string, { id: string }>).user.id;
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
     if (!user || !user.password) {
       throw new AppError('User not found', 404);
@@ -131,7 +138,7 @@ export const updatePassword = async (
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
-      where: { id: userId },
+      where: { id: req.user.id },
       data: { password: hashedPassword },
     });
 

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
@@ -28,9 +28,13 @@ export const login = async (
     if (!user.isVerified) throw new AppError('Email not verified', 401);
 
     const accessToken = jwt.sign(
-      { id: user.id, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: '15m' }
     );
 
     const refreshToken = crypto.randomBytes(40).toString('hex');
@@ -90,9 +94,13 @@ export const refresh = async (
     await prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
     const accessToken = jwt.sign(
-      { id: storedToken.userId, role: storedToken.user.role },
+      {
+        id: storedToken.user.id,
+        email: storedToken.user.email,
+        role: storedToken.user.role,
+      },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: '15m' }
     );
 
     const newRefreshToken = crypto.randomBytes(40).toString('hex');
@@ -108,7 +116,17 @@ export const refresh = async (
     res.cookie('refreshToken', newRefreshToken, { httpOnly: true, path: '/' });
     res.status(200).json({ status: 'success', data: { accessToken } });
   } catch (error) {
-    next(error);
+    console.error('LOGIN ERROR:', error);
+
+    if (error instanceof AppError) {
+      return next(error);
+    }
+
+    if (error instanceof Error) {
+      return next(new AppError(error.message, 400));
+    }
+
+    return next(new AppError('Internal Server Error', 500));
   }
 };
 

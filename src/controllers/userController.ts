@@ -1,14 +1,18 @@
 import { Request, Response } from 'express';
-import { prisma } from '../prisma/client';
+import prisma from '../utils/prisma';
 
 export const getDashboard = async (req: Request, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
   try {
+    // Auth check (fast fail)
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.user;
+
+    // Fetch user dashboard data
     const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
+      where: { id },
       select: {
         name: true,
         email: true,
@@ -26,8 +30,13 @@ export const getDashboard = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch dashboard' });
+    return res.status(200).json(user);
+  } catch (error) {
+    console.error('DASHBOARD ERROR:', error);
+
+    res.status(500).json({
+      error: 'Failed to fetch dashboard',
+      details: error instanceof Error ? error.message : error,
+    });
   }
 };

@@ -5,9 +5,13 @@ import crypto from 'crypto';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { registerSchema } from '../../validators/auth.validator';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
+import { SignOptions } from 'jsonwebtoken';
 
 const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+const jwtOptions: SignOptions = {
+  expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+};
 
 interface UserTokenData {
   id: string;
@@ -22,9 +26,13 @@ const createSendToken = async (
   res: Response
 ) => {
   const accessToken = jwt.sign(
-    { id: user.id, role: user.role },
+    {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+    },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN }
+    jwtOptions
   );
 
   const refreshToken = crypto.randomBytes(40).toString('hex');

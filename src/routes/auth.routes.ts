@@ -20,7 +20,7 @@ router.post('/verify-otp', verifyOtp);
 
 // --- Auth Routes ---
 // 1. Register: Middleware verifies OTP first. If valid, controller creates verified user.
-router.post('/register', verifyOtp, registerController.register);
+router.post('/register', registerController.register);
 
 // 2. Login & Logout
 router.post('/login', authLimiter, loginController.login);

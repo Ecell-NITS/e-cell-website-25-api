@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
-import prisma from '../../prisma/client';
+import prisma from '../utils/prisma';
 
 export const protect = async (
   req: Request,

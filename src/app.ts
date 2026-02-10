@@ -1,6 +1,4 @@
 import express from 'express';
-process.env.NODE_OPTIONS = '--dns-result-order=ipv4first';
-
 import blogRoutes from './routes/blog.routes';
 import commentRoutes from './routes/comment.routes';
 
@@ -10,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { errorHandler } from './middlewares/errorHandler';
 
+import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/userRoutes';
 import adminRoutes from './routes/adminRoutes';
 import queryRoutes from './routes/queryRoutes';
@@ -38,6 +37,7 @@ app.use(cookieParser());
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/query', queryRoutes);
+app.use('/api/auth', authRoutes);
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

@@ -2,24 +2,25 @@ import { Router } from 'express';
 import { getUsers, updateUserRole } from '../controllers/adminController';
 import { verifyToken } from '../middlewares/verifyToken';
 import { requireRole } from '../middlewares/requireRole';
-import { UserRole } from '../types/userRole';
+
+import { Role } from '@prisma/client';
 
 const router = Router();
 
-router.get('/users', verifyToken, requireRole([UserRole.SUPERADMIN]), getUsers);
+router.get('/users', verifyToken, requireRole(Role.SUPERADMIN), getUsers);
 
 router.put(
   '/make-admin/:userId',
   verifyToken,
-  requireRole([UserRole.SUPERADMIN]),
-  (req, res) => updateUserRole(req, res, UserRole.ADMIN)
+  requireRole(Role.SUPERADMIN),
+  (req, res) => updateUserRole(req, res, Role.ADMIN)
 );
 
 router.put(
   '/make-client/:userId',
   verifyToken,
-  requireRole([UserRole.SUPERADMIN]),
-  (req, res) => updateUserRole(req, res, UserRole.CLIENT)
+  requireRole(Role.SUPERADMIN),
+  (req, res) => updateUserRole(req, res, Role.USER)
 );
 
 export default router;

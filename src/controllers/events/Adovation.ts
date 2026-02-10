@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
 import { sendEmail } from '../../utils/email';
 
 // interface TeamMember {

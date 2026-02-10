@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
+// --- CONFIG & UTILS ---
 import { errorHandler } from './middlewares/errorHandler';
 
 import authRoutes from './routes/auth.routes';
@@ -18,6 +19,9 @@ import bidwiseRoutes from './/routes/events/bidwise.routes';
 import startupExpoRoutes from './/routes/events/startupExpo.routes';
 import businessHackathonRoutes from './/routes/events/businessHackathon.routes';
 import treasureApplyRoutes from './/routes/events/treasureApply.routes';
+// --- ROUTE IMPORTS ---
+import teamAuthRoutes from './routes/auth.routes'; // The Team's new Auth (Google, etc.)
+import userOtpRoutes from './routes/authRoutes'; // YOUR Auth (OTP, CheckEmail)
 
 const app = express();
 // Security Headers
@@ -31,9 +35,10 @@ app.use(
   })
 );
 
-// Body Parsers
+// Body parsing (Team set a 10kb limit, which is good practice)
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
+
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/query', queryRoutes);
@@ -54,5 +59,14 @@ app.use('/api/events/bidwise', bidwiseRoutes);
 app.use('/api/events/startupexpo', startupExpoRoutes);
 app.use('/api/events/businesshackathon', businessHackathonRoutes);
 app.use('/api/events/treasurehunt', treasureApplyRoutes);
+
+// --- ROUTES ---
+
+// 2. Register Routes
+// Team's Routes (Prefix: /api/auth)
+app.use('/api/auth', teamAuthRoutes);
+
+// Your Routes (Prefix: / aka Root)
+app.use('/', userOtpRoutes); // Keeps /checkEmail, /send-otp working
 
 export default app;

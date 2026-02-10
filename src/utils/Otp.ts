@@ -3,6 +3,7 @@ import { sendEmail } from './email';
 import { PrismaClient } from '@prisma/client';
 
 import { setTimeout } from 'timers';
+import { NextFunction } from 'express-serve-static-core';
 
 const prisma = new PrismaClient();
 
@@ -125,6 +126,7 @@ export const sendOtp = async (req: Request, res: Response) => {
     res.status(200).json({ message: 'OTP sent successfully' });
 
     // Auto-expire after 5 minutes (same logic kept)
+
     setTimeout(async () => {
       const otpData = await prisma.otp.findFirst({ where: { email } });
       if (!otpData) return;
@@ -137,14 +139,26 @@ export const sendOtp = async (req: Request, res: Response) => {
   }
 };
 
-export const verifyOtp = async (req: Request, res: Response) => {
+export const verifyOtp = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const { email, otp } = req.body;
 
   try {
-    const otpData = await prisma.otp.findFirst({ where: { email } });
+    const otpData = await prisma.otp.findFirst({
+      where: { email },
+    });
 
     if (!otpData) {
-      res.status(400).json({ message: 'OTP not found' });
+      res.status(400).json({ message: 'OTP not found or expired' });
+      return;
+    }
+
+    if (otpData.otp !== otp) {
+      res.status(400).json({ message: 'OTP not matched' });
+
       return;
     }
 
@@ -156,6 +170,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     await prisma.otp.delete({ where: { id: otpData.id } });
 
     res.status(200).json({ message: 'OTP verified successfully' });
+    next();
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: 'Internal server error' });

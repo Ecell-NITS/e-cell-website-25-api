@@ -34,7 +34,7 @@ export const login = async (
         role: user.role,
       },
       env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '7d' }
     );
 
     const refreshToken = crypto.randomBytes(40).toString('hex');
@@ -100,7 +100,7 @@ export const refresh = async (
         role: storedToken.user.role,
       },
       env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '7d' }
     );
 
     const newRefreshToken = crypto.randomBytes(40).toString('hex');

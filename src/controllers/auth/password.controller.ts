@@ -126,6 +126,7 @@ export const updatePassword = async (
     }
 
     const { currentPassword, newPassword } = updatePassSchema.parse(req.body);
+
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
     if (!user || !user.password) {

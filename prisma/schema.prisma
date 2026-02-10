@@ -9,14 +9,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+
+model Blog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  tag         String
+  intro       String
+  content     String
+  writerName  String
+  writerIntro String
+  writerPic   String   // Stores the image URL
+  timeStamp   String
+  topicPic    String   // Stores the image URL
+  writerEmail String
+
+  isAccepted  Boolean  @default(false)
+
+  subject     String?
+  text        String?
+}
+
+model Query {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+}
+
+
+
+enum Role {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
   name      String?
-  picture   String?  
-  googleId  String?  
-  password  String?  
+  picture   String?
+  googleId  String?
+  password  String?
   role      Role     @default(USER)
+
 
   isVerified   Boolean   @default(false) 
   otp          String?   
@@ -27,6 +61,7 @@ model User {
   github     String?
   instagram  String?
   facebook   String?
+
 
   passwordResetToken   String?
   passwordResetExpires DateTime?
@@ -39,21 +74,22 @@ model User {
 }
 
 model RefreshToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  token     String   @unique
-  userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  expiresAt DateTime
-  revoked   Boolean  @default(false)
-  replacedByToken String? 
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  token       String   @unique
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  replacedByToken String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("refresh_tokens")
 }
 
+<<<<<<< HEAD
 model Query {
   id        String   @id @map("_id")  @default(auto()) @db.ObjectId
   name      String
@@ -70,6 +106,7 @@ enum Role {
   ADMIN
   SUPERADMIN
 }
+
 
 model Otp {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId

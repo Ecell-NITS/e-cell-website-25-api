@@ -22,7 +22,9 @@ export const sendEmail = async (options: EmailOptions) => {
   // 2. Define Email Options
   const mailOptions = {
     from: `"E-Cell Support" <${env.EMAIL_USERNAME}>`,
+
     to: options.email,
+
     subject: options.subject,
     text: options.message,
     html: options.html,

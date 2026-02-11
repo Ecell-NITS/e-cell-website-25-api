@@ -11,10 +11,11 @@ export const createBlog = async (req: Request, res: Response) => {
       data: validatedData,
       select: {
         id: true,
-        email: true,
+        title: true,
+        writerEmail: true,
         subject: true,
         text: true,
-        createdAt: true,
+        isAccepted: true,
       },
     });
 
@@ -22,23 +23,19 @@ export const createBlog = async (req: Request, res: Response) => {
       message: 'Blog created successfully',
       data: blog,
     });
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({
-        message: error.errors[0].message,
-      });
-    }
-
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error' });
+  } catch (error) {
+    console.error('FULL ERROR:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Internal server error',
+    });
   }
 };
 
 export const myPublishedBlogs = async (req: Request, res: Response) => {
   try {
-    const { email } = req.query;
+    const { writerEmail } = req.query;
 
-    if (!email || typeof email !== 'string') {
+    if (!writerEmail || typeof writerEmail !== 'string') {
       return res.status(400).json({
         message: 'email is required',
       });
@@ -50,13 +47,13 @@ export const myPublishedBlogs = async (req: Request, res: Response) => {
 
     const [blogs, total] = await Promise.all([
       prisma.blog.findMany({
-        where: { email },
-        orderBy: { createdAt: 'desc' },
+        where: { writerEmail },
+        orderBy: { timeStamp: 'desc' },
         skip,
         take: limit,
       }),
       prisma.blog.count({
-        where: { email },
+        where: { writerEmail },
       }),
     ]);
 
@@ -82,7 +79,7 @@ export const publicWrittenBlog = async (req: Request, res: Response) => {
   try {
     const { authoruniqueid } = req.params;
 
-    if (!authoruniqueid) {
+    if (!authoruniqueid || typeof authoruniqueid !== 'string') {
       return res.status(400).json({
         message: 'authoruniqueid is required',
       });
@@ -126,7 +123,7 @@ export const tagSpecificBlogList = async (req: Request, res: Response) => {
   try {
     const { tagName } = req.params;
 
-    if (!tagName) {
+    if (!tagName || typeof tagName !== 'string') {
       return res.status(400).json({
         message: 'tagName is required',
       });
@@ -138,13 +135,23 @@ export const tagSpecificBlogList = async (req: Request, res: Response) => {
 
     const [blogs, total] = await Promise.all([
       prisma.publicBlog.findMany({
-        where: { tag: tagName },
+        where: {
+          tag: {
+            equals: tagName,
+            mode: 'insensitive',
+          },
+        },
         orderBy: { timestamp: 'desc' },
         skip,
         take: limit,
       }),
       prisma.publicBlog.count({
-        where: { tag: tagName },
+        where: {
+          tag: {
+            equals: tagName,
+            mode: 'insensitive',
+          },
+        },
       }),
     ]);
 
@@ -187,5 +194,115 @@ export const createApiBlog = async (req: Request, res: Response) => {
 
     console.error(error);
     return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+//  Get All Blogs
+export const getBlogs = async (_req: Request, res: Response) => {
+  try {
+    const blogs = await prisma.blog.findMany();
+    res.status(200).json(blogs);
+  } catch (error) {
+    console.error('FULL ERROR:', error);
+    res.status(500).json({ error });
+  }
+};
+//  Get Blog by ID
+export const getBlogById = async (req: Request, res: Response) => {
+  const { blogId } = req.params;
+  if (!blogId || Array.isArray(blogId)) {
+    return res.status(400).json({ error: 'Invalid blog ID.' });
+  }
+  try {
+    const blog = await prisma.blog.findUnique({ where: { id: blogId } });
+    if (blog) res.status(200).json(blog);
+    else res.status(404).json({ error: 'Blog not found.' });
+  } catch {
+    // Removed the error variable entirely to satisfy linter
+    res.status(500).json({ error: 'Error fetching blog.' });
+  }
+};
+
+// Get Accepted Blogs
+export const getAcceptedBlogs = async (req: Request, res: Response) => {
+  const { blogId, email } = req.query as { blogId: string; email: string };
+  if (!blogId || !email)
+    return res.status(400).json({ error: 'Missing parameters.' });
+
+  try {
+    const blog = await prisma.blog.findUnique({ where: { id: blogId } });
+    if (!blog) return res.status(404).json({ error: 'Blog not found.' });
+    if (blog.writerEmail !== email)
+      return res.status(403).json({ error: 'Unauthorized.' });
+    if (!blog.isAccepted)
+      return res.status(400).json({ message: 'Not accepted yet.' });
+
+    res.status(200).json(blog);
+  } catch {
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+// Publish Blog
+export const publishBlog = async (req: Request, res: Response) => {
+  const { Id } = req.params;
+  const { email, writerName, subject, text } = req.body;
+  if (!Id || Array.isArray(Id)) {
+    return res.status(400).json({ error: 'Invalid Blog ID.' });
+  }
+
+  try {
+    const blog = await prisma.blog.findUnique({ where: { id: Id } });
+    if (!blog) return res.status(404).json({ error: 'Blog not found.' });
+    if (blog.writerEmail !== email)
+      return res.status(403).json({ error: 'Unauthorized.' });
+
+    const updated = await prisma.blog.update({
+      where: { id: Id },
+      data: { subject, text, writerName, isAccepted: true },
+    });
+    res.status(200).json({ message: 'Published successfully.', blog: updated });
+  } catch {
+    res.status(500).json({ error: 'Failed to publish.' });
+  }
+};
+
+// Delete Blog
+export const deleteBlog = async (req: Request, res: Response) => {
+  const { blogId } = req.params;
+  const { email, writerName } = req.body;
+  if (!blogId || Array.isArray(blogId)) {
+    return res.status(400).json({ error: 'Invalid Blog ID.' });
+  }
+
+  try {
+    const blog = await prisma.blog.findUnique({ where: { id: blogId } });
+    if (!blog) return res.status(404).json({ error: 'Blog not found.' });
+    if (blog.writerEmail !== email || blog.writerName !== writerName) {
+      return res.status(403).json({ error: 'Unauthorized.' });
+    }
+
+    await prisma.blog.delete({ where: { id: blogId } });
+    res.status(200).json({ message: 'Deleted successfully.' });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete.' });
+  }
+};
+
+// Edit Blog
+export const editBlog = async (req: Request, res: Response) => {
+  const { blogId } = req.params;
+  const data = req.body;
+  if (!blogId || Array.isArray(blogId)) {
+    return res.status(400).json({ error: 'Invalid Blog ID.' });
+  }
+  try {
+    const updated = await prisma.blog.update({
+      where: { id: blogId },
+      data: { ...data, timeStamp: data.timestamp },
+    });
+    res.status(200).json({ message: 'Updated successfully.', blog: updated });
+  } catch {
+    res.status(500).json({ error: 'Failed to update.' });
   }
 };

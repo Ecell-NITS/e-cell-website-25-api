@@ -9,6 +9,7 @@ import * as registerController from '../controllers/auth/register.controller';
 import * as loginController from '../controllers/auth/login.controller';
 import * as passwordController from '../controllers/auth/password.controller';
 import * as profileController from '../controllers/auth/profile.controller';
+import { checkEmail } from '../controllers/auth/email.controller';
 
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
@@ -17,6 +18,7 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 // User hits this FIRST to get the code
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
+router.post('/checkEmail', checkEmail);
 
 // --- Auth Routes ---
 // 1. Register: Middleware verifies OTP first. If valid, controller creates verified user.

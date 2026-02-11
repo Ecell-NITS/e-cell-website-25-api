@@ -8,7 +8,8 @@ import { z } from 'zod';
 // });
 
 export const createBlogSchema = z.object({
-  email: z.string().email('Invalid email'),
+  title: z.string().min(1),
+  writerEmail: z.string().email('Invalid email'),
   subject: z.string().min(3, 'Subject is too short'),
   text: z.string().min(10, 'Text is too short'),
 });

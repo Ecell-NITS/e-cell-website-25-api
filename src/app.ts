@@ -21,7 +21,6 @@ import businessHackathonRoutes from './/routes/events/businessHackathon.routes';
 import treasureApplyRoutes from './/routes/events/treasureApply.routes';
 // --- ROUTE IMPORTS ---
 import teamAuthRoutes from './routes/auth.routes'; // The Team's new Auth (Google, etc.)
-import userOtpRoutes from './routes/authRoutes'; // YOUR Auth (OTP, CheckEmail)
 
 const app = express();
 // Security Headers
@@ -50,9 +49,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/version', (_req, res) => res.json({ version: '1.0.0' }));
 app.use(errorHandler);
 
-app.use('/', blogRoutes);
+app.use('/api/blog', blogRoutes);
 
-app.use('/', commentRoutes);
+app.use('/api/comment', commentRoutes);
 
 app.use('/api/events/adovation', adovationRoutes);
 app.use('/api/events/bidwise', bidwiseRoutes);
@@ -65,8 +64,5 @@ app.use('/api/events/treasurehunt', treasureApplyRoutes);
 // 2. Register Routes
 // Team's Routes (Prefix: /api/auth)
 app.use('/api/auth', teamAuthRoutes);
-
-// Your Routes (Prefix: / aka Root)
-app.use('/', userOtpRoutes); // Keeps /checkEmail, /send-otp working
 
 export default app;

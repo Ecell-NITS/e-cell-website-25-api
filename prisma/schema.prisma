@@ -10,38 +10,6 @@ datasource db {
 }
 
 
-
-model Blog {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  title       String
-  tag         String
-  intro       String
-  content     String
-  writerName  String
-  writerIntro String
-  writerPic   String   // Stores the image URL
-  timeStamp   String
-  topicPic    String   // Stores the image URL
-  writerEmail String
-
-  isAccepted  Boolean  @default(false)
-
-  subject     String?
-  text        String?
-}
-
-model Query {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-}
-
-
-
-enum Role {
-  USER
-  ADMIN
-  SUPERADMIN
-}
-
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
@@ -89,7 +57,7 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-<<<<<<< HEAD
+
 model Query {
   id        String   @id @map("_id")  @default(auto()) @db.ObjectId
   name      String
@@ -101,11 +69,6 @@ model Query {
 
 
 
-enum Role {
-  USER
-  ADMIN
-  SUPERADMIN
-}
 
 
 model Otp {
@@ -116,12 +79,31 @@ model Otp {
 }
 
 
+
 model Blog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String
-  subject   String
-  text      String
-  createdAt DateTime @default(now())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String?
+  tag         String?
+  intro       String?
+  content     String?
+  writerName  String?
+  writerIntro String?
+  writerPic   String?  // Stores the image URL
+  timeStamp   String?
+  topicPic    String?  // Stores the image URL
+  writerEmail String?
+
+  isAccepted  Boolean  @default(false)
+
+  subject     String?
+  text        String?
+}
+
+
+enum Role {
+  USER
+  ADMIN
+  SUPERADMIN
 }
 
 model PublicBlog {

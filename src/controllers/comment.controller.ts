@@ -2,7 +2,10 @@ import { createCommentSchema } from '../validators/comment.validators';
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 
-export const getApiComments = async (req: Request, res: Response) => {
+export const getApiComments = async (
+  req: Request<{ postId: string }>,
+  res: Response
+) => {
   try {
     const { postId } = req.params;
 
@@ -33,7 +36,10 @@ export const getApiComments = async (req: Request, res: Response) => {
   }
 };
 
-export const createApiComment = async (req: Request, res: Response) => {
+export const createApiComment = async (
+  req: Request<{ Id: string }>,
+  res: Response
+) => {
   try {
     const { Id } = req.params;
 

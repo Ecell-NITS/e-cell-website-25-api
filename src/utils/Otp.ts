@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
 import { sendEmail } from './email';
-import { PrismaClient } from '@prisma/client';
 
 import { setTimeout } from 'timers';
 import { NextFunction } from 'express-serve-static-core';
-
-const prisma = new PrismaClient();
+import prisma from './prisma';
 
 export const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -142,7 +140,7 @@ export const sendOtp = async (req: Request, res: Response) => {
 export const verifyOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
   const { email, otp } = req.body;
 
@@ -162,15 +160,9 @@ export const verifyOtp = async (
       return;
     }
 
-    if (otpData.otp !== otp) {
-      res.status(400).json({ message: 'OTP not matched' });
-      return;
-    }
-
     await prisma.otp.delete({ where: { id: otpData.id } });
 
     res.status(200).json({ message: 'OTP verified successfully' });
-    next();
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: 'Internal server error' });

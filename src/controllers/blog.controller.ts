@@ -223,23 +223,16 @@ export const getBlogById = async (req: Request, res: Response) => {
   }
 };
 
-// Get Accepted Blogs
-export const getAcceptedBlogs = async (req: Request, res: Response) => {
-  const { blogId, email } = req.query as { blogId: string; email: string };
-  if (!blogId || !email)
-    return res.status(400).json({ error: 'Missing parameters.' });
-
+// Get Accepted Blogs (returns all accepted blogs)
+export const getAcceptedBlogs = async (_req: Request, res: Response) => {
   try {
-    const blog = await prisma.blog.findUnique({ where: { id: blogId } });
-    if (!blog) return res.status(404).json({ error: 'Blog not found.' });
-    if (blog.writerEmail !== email)
-      return res.status(403).json({ error: 'Unauthorized.' });
-    if (!blog.isAccepted)
-      return res.status(400).json({ message: 'Not accepted yet.' });
-
-    res.status(200).json(blog);
+    const blogs = await prisma.blog.findMany({
+      where: { isAccepted: true },
+      orderBy: { timeStamp: 'desc' },
+    });
+    return res.status(200).json({ status: 'success', data: blogs });
   } catch {
-    res.status(500).json({ error: 'Server error.' });
+    return res.status(500).json({ error: 'Server error.' });
   }
 };
 

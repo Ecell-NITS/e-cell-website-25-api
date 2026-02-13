@@ -9,6 +9,7 @@ import * as registerController from '../controllers/auth/register.controller';
 import * as loginController from '../controllers/auth/login.controller';
 import * as passwordController from '../controllers/auth/password.controller';
 import * as profileController from '../controllers/auth/profile.controller';
+import * as googleController from '../controllers/auth/google.controller';
 import { checkEmail } from '../controllers/auth/email.controller';
 
 const router = Router();
@@ -19,6 +20,10 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/checkEmail', checkEmail);
+
+// --- Google OAuth ---
+router.get('/google', googleController.googleRedirect);
+router.get('/google/callback', googleController.googleCallback);
 
 // --- Auth Routes ---
 // 1. Register: Middleware verifies OTP first. If valid, controller creates verified user.

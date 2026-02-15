@@ -6,9 +6,59 @@ import { Buffer } from 'node:buffer';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { registerSchema } from '../../validators/auth.validator';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
+import { SignOptions } from 'jsonwebtoken';
 
-const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000; // Changed from TWO_WEEKS
+const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+const jwtOptions: SignOptions = {
+  expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+};
+
+interface UserTokenData {
+  id: string;
+  role: string;
+  [key: string]: unknown;
+}
+
+// Helper to create token and save it
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _createSendToken = async (
+  user: UserTokenData,
+  statusCode: number,
+  res: Response
+) => {
+  const accessToken = jwt.sign(
+    {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+    },
+    env.JWT_SECRET,
+    jwtOptions
+  );
+
+  const refreshToken = crypto.randomBytes(40).toString('hex');
+
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId: user.id,
+      expiresAt: new Date(Date.now() + ONE_WEEK),
+    },
+  });
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: ONE_WEEK,
+  });
+
+  res
+    .status(statusCode)
+    .json({ status: 'success', data: { user, accessToken } });
+};
 
 export const register = async (
   req: Request,
@@ -53,7 +103,7 @@ export const register = async (
     }
 
     // Secure comparison
-    const otpBuffer = Buffer.from(data.otp);
+    const otpBuffer = Buffer.from(req.body.otp ?? '');
     const storedBuffer = Buffer.from(otpRecord.otp);
 
     // Timing safe check
@@ -79,7 +129,6 @@ export const register = async (
           password: hashedPassword,
           name: data.name,
           bio: data.bio,
-          position: data.position,
           linkedin: data.linkedin,
           github: data.github,
           instagram: data.instagram,
@@ -117,8 +166,8 @@ export const register = async (
     // (Performed outside transaction but failure here doesn't corrupt DB state, just requires login)
     const accessToken = jwt.sign(
       { id: result.newUser.id, role: result.newUser.role },
-      env.JWT_SECRET as string,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      env.JWT_SECRET,
+      jwtOptions
     );
 
     res.cookie('refreshToken', result.refreshToken, {

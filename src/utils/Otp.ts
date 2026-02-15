@@ -1,135 +1,173 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendEmail } from './email';
-import prisma from '../../prisma/client'; // Use singleton
-import { AppError } from './AppError';
-import crypto from 'crypto';
-import { Buffer } from 'node:buffer';
-import { z } from 'zod';
+import { setTimeout } from 'timers';
+import prisma from './prisma';
 
-// Validation schemas
-const sendOtpSchema = z.object({
-  email: z.string().email('Invalid email format').toLowerCase().trim(),
-});
+export const generateOtp = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
-const verifyOtpSchema = z.object({
-  email: z.string().email('Invalid email format').toLowerCase().trim(),
-  otp: z
-    .string()
-    .length(6, 'OTP must be 6 digits')
-    .regex(/^\d{6}$/, 'OTP must contain only numbers'),
-});
+export const deletePreviousOtps = async (email: string) => {
+  return prisma.otp.deleteMany({ where: { email } });
+};
+
+export const createOtp = async (email: string, otp: string) => {
+  return prisma.otp.create({
+    data: { email, otp },
+  });
+};
+
+export const buildOtpEmailHtml = (otp: string): string => {
+  return `
+  <!DOCTYPE html>
+<html lang="en" style="margin:0;padding:0;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OTP Verification</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Poppins',Arial,Helvetica,sans-serif;">
+    <table align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation"
+      style="max-width:600px;margin:auto;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+      
+      <!-- HEADER -->
+      <tr>
+        <td style="background-color:#224259;text-align:center;padding:24px 16px;">
+          <img src="https://res.cloudinary.com/ecell/image/upload/v1762102444/ecell-logo-bw2_sayvqp_htrv0f.png" alt="E-Cell NIT Silchar" width="60" style="margin-bottom:10px;">
+          <h2 style="color:#ffffff;margin:0;font-size:20px;letter-spacing:0.5px;">E-Cell NIT Silchar</h2>
+          <p style="color:#cfd8e3;margin:5px 0 0;font-size:14px;">OTP Verification</p>
+        </td>
+      </tr>
+
+      <!-- BODY -->
+      <tr>
+        <td style="padding:32px 40px;color:#1a1a1a;text-align:center;">
+          <h3 style="color:#224259;margin-top:0;">Verify Your Email</h3>
+          <p style="line-height:1.6;color:#333;font-size:15px;">
+            Use the following One-Time Password (OTP) to verify your email address.
+          </p>
+          <div style="margin:30px auto;width:max-content;background-color:#224259;color:#ffffff;font-size:28px;letter-spacing:4px;padding:12px 32px;border-radius:8px;font-weight:600;">
+            ${otp}
+          </div>
+          <p style="line-height:1.6;color:#555;font-size:14px;">
+            This OTP will expire in <strong>5 minutes</strong>. Please do not share it with anyone.
+          </p>
+
+          <p style="margin-top:30px;color:#333;">
+            <strong>Regards,</strong><br/>
+            Team E-Cell NIT Silchar
+          </p>
+        </td>
+      </tr>
+
+      <!-- FOOTER -->
+      <tr>
+        <td style="background-color:#224259;padding:20px;text-align:center;color:#cfd8e3;font-size:13px;">
+          <p style="margin:0;">© ${new Date().getFullYear()} E-Cell NIT Silchar. All rights reserved.</p>
+          <div style="margin-top:8px;">
+            <a href="https://www.instagram.com/ecell.nitsilchar" style="margin:0 6px;">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/2048px-Instagram_logo_2016.svg.png" width="20" alt="Instagram" />
+            </a>
+            <a href="https://www.linkedin.com/company/ecell-nit-silchar" style="margin:0 6px;">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/500px-LinkedIn_logo_initials.png" width="20" alt="LinkedIn" />
+            </a>
+            <a href="https://www.facebook.com/ecell.nit.silchar/" style="margin:0 6px;">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1028px-Logo_de_Facebook.png" width="20" alt="Facebook" />
+            </a>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+  `;
+};
+
+const sendOtpEmail = async (email: string, otp: string, html: string) => {
+  return sendEmail({
+    email,
+    subject: 'OTP for verification',
+    message: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+    html,
+  });
+};
+
+export const isOtpExpired = (createdAt: Date): boolean => {
+  return Date.now() - new Date(createdAt).getTime() > 5 * 60 * 1000;
+};
 
 export const sendOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
   try {
-    const { email } = sendOtpSchema.parse(req.body);
+    const { email } = req.body;
 
-    // Check for recent OTP requests (rate limiting at function level)
-    const recentOtp = await prisma.otp.findFirst({
-      where: {
-        email,
-        createdAt: {
-          gte: new Date(Date.now() - 60000), // Within last minute
-        },
-      },
-    });
+    const otp = generateOtp();
+    console.log(`OTP for ${email} is ${otp}`);
 
-    if (recentOtp) {
-      return next(
-        new AppError('Please wait 1 minute before requesting another OTP', 429)
-      );
+    await deletePreviousOtps(email);
+
+    const otpSent = await createOtp(email, otp);
+    if (!otpSent) {
+      res.status(400).json({ message: 'OTP not sent' });
+      return;
     }
 
-    // Generate cryptographically secure OTP
-    const otp = crypto.randomInt(100000, 999999).toString();
+    const html = buildOtpEmailHtml(otp);
 
-    // Only log in development (never log actual OTP in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[DEV] OTP for ${email}: ${otp}`);
-    }
-
-    // Delete old OTPs and create new one in a transaction
-    const otpRecord = await prisma.$transaction(async tx => {
-      await tx.otp.deleteMany({ where: { email } });
-      return tx.otp.create({
-        data: {
-          email,
-          otp,
-        },
-      });
-    });
-
-    // Send email (handle failures properly)
     try {
-      await sendEmail({
-        email,
-        subject: 'E-Cell - Verification Code',
-        message: `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you didn't request this, please ignore this email.`,
-      });
-    } catch (emailError) {
-      console.error('Email send failed:', emailError);
-      // Delete OTP since email failed
-      await prisma.otp.delete({ where: { id: otpRecord.id } });
-      return next(new AppError('Failed to send OTP. Please try again.', 500));
+      await sendOtpEmail(email, otp, html);
+    } catch (error) {
+      console.error('Error sending email for OTP:', error);
     }
 
-    res.status(200).json({
-      status: 'success',
-      message: 'OTP sent successfully to your email',
-    });
+    res.status(200).json({ message: 'OTP sent successfully' });
+
+    // Auto-expire after 5 minutes (same logic kept)
+
+    setTimeout(async () => {
+      const otpData = await prisma.otp.findFirst({ where: { email } });
+      if (!otpData) return;
+
+      await prisma.otp.deleteMany({ where: { id: otpSent.id } });
+    }, 60000 * 5);
   } catch (error) {
-    next(error); // Simply pass all errors to global handler
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const verifyOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
-  try {
-    // Validate and sanitize input
-    const { email, otp } = verifyOtpSchema.parse(req.body);
+  const { email, otp } = req.body;
 
-    // Fetch most recent OTP for this email
-    const otpRecord = await prisma.otp.findFirst({
+  try {
+    const otpData = await prisma.otp.findFirst({
       where: { email },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!otpRecord) {
-      return next(new AppError('OTP not found or expired', 400));
+    if (!otpData) {
+      res.status(400).json({ message: 'OTP not found or expired' });
+      return;
     }
 
-    // Check if OTP has expired (5 minutes)
-    const otpAge = Date.now() - new Date(otpRecord.createdAt).getTime();
-    if (otpAge > 5 * 60 * 1000) {
-      await prisma.otp.delete({ where: { id: otpRecord.id } });
-      return next(
-        new AppError('OTP has expired. Please request a new one.', 400)
-      );
+    if (otpData.otp !== otp) {
+      res.status(400).json({ message: 'OTP not matched' });
+
+      return;
     }
 
-    // Constant-time comparison to prevent timing attacks
-    const otpBuffer = Buffer.from(otp);
-    const storedBuffer = Buffer.from(otpRecord.otp);
+    await prisma.otp.delete({ where: { id: otpData.id } });
 
-    if (
-      otpBuffer.length !== storedBuffer.length ||
-      !crypto.timingSafeEqual(otpBuffer, storedBuffer)
-    ) {
-      return next(new AppError('Invalid OTP', 400));
-    }
-
-    // OTP is valid - delete it (one-time use)
-    await prisma.otp.delete({ where: { id: otpRecord.id } });
-
-    // Pass to next middleware/controller
-    next();
+    res.status(200).json({ message: 'OTP verified successfully' });
   } catch (error) {
-    next(error); // Simply pass all errors to global handler
+    console.log(error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };

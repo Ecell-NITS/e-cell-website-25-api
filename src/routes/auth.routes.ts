@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { protect, restrictTo } from '../middlewares/authMiddleware';
 import { Role } from '@prisma/client';
-import { sendOtp } from '../utils/Otp';
+import { sendOtp, verifyOtp } from '../utils/Otp'; // Import OTP utilities
 
 // Import from controllers
 import * as registerController from '../controllers/auth/register.controller';
@@ -10,6 +10,7 @@ import * as loginController from '../controllers/auth/login.controller';
 import * as passwordController from '../controllers/auth/password.controller';
 import * as profileController from '../controllers/auth/profile.controller';
 import * as googleController from '../controllers/auth/google.controller';
+import { checkEmail } from '../controllers/auth/email.controller';
 
 const router = Router();
 
@@ -37,9 +38,15 @@ const registerLimiter = rateLimit({
 // --- OTP Routes ---
 // User hits this FIRST to get the code
 router.post('/send-otp', otpLimiter, sendOtp);
+router.post('/verify-otp', otpLimiter, verifyOtp);
+router.post('/checkEmail', checkEmail);
+
+// --- Google OAuth ---
+router.get('/google', googleController.googleRedirect);
+router.get('/google/callback', googleController.googleCallback);
 
 // --- Auth Routes ---
-// 1. Register: Controller verifies OTP internally for atomicity.
+// 1. Register: Middleware verifies OTP first. If valid, controller creates verified user.
 router.post('/register', registerLimiter, registerController.register);
 
 // 2. Login & Logout
@@ -49,14 +56,11 @@ router.post('/logout', loginController.logout);
 
 // --- Password Management ---
 // Forgot Password flow usually follows the same OTP pattern:
-router.post('/forgot-password', authLimiter, passwordController.forgotPassword);
-router.post('/reset-password', authLimiter, passwordController.resetPassword);
+router.post('/forgot-password', passwordController.forgotPassword);
+router.post('/reset-password', passwordController.resetPassword);
 
 // --- Profiles ---
 router.get('/public-profile/:id', profileController.getPublicProfile);
-
-// --- Google OAuth ---
-router.post('/google', authLimiter, googleController.googleAuth);
 
 // --- Protected Routes (Requires Login) ---
 router.use(protect);

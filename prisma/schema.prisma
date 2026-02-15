@@ -1,3 +1,5 @@
+
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,19 +9,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
-  name      String
-  picture   String?  
-  
-  // Authentication methods (mutually exclusive in practice)
-  googleId  String?  @unique
-  password  String?  
-  
-  role      Role     @default(CLIENT)
+  name      String?
+  picture   String?
+  googleId  String?
+  password  String?
+  role      Role     @default(USER)
 
-  // Profile fields
+
+  isVerified   Boolean   @default(false) 
+  otp          String?   
+  otpExpires   DateTime?
+  userimg    String?
   bio        String?
   position   String?
   linkedin   String?
@@ -27,8 +31,10 @@ model User {
   instagram  String?
   facebook   String?
 
-  // Relations
-  refreshTokens RefreshToken[]
+
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  refreshTokens        RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -37,21 +43,64 @@ model User {
 }
 
 model RefreshToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  token     String   @unique
-  userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  expiresAt DateTime
-  revoked   Boolean  @default(false)
-  replacedByToken String? 
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  token       String   @unique
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  replacedByToken String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+
+model Query {
+  id        String   @id @map("_id")  @default(auto()) @db.ObjectId
+  name      String
+  email     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+
+
+
+
+model Otp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  otp       String
+  createdAt DateTime @default(now())
+}
+
+
+
+model Blog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String?
+  tag         String?
+  intro       String?
+  content     String?
+  writerName  String?
+  writerIntro String?
+  writerPic   String?  // Stores the image URL
+  timeStamp   String?
+  topicPic    String?  // Stores the image URL
+  writerEmail String?
+
+  isAccepted  Boolean  @default(false)
+
+  subject     String?
+  text        String?
+}
+
 
 enum Role {
   CLIENT
@@ -59,13 +108,199 @@ enum Role {
   SUPERADMIN
 }
 
-model Otp {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String
-  otp       String
-  createdAt DateTime @default(now())
-  
-  @@index([email])
-  @@index([createdAt])
-  @@map("otps")
+model PublicBlog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  authoruniqueid String
+  blogId         String
+  title          String
+  tag            String
+  intro          String
+  content        String
+  writername     String
+  writerintro    String
+  writerpic      String
+  writeremail    String
+  topicpic       String
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
 }
+
+model Comment {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  postId        String
+  commentAuthor String
+  commentPic    String
+  text          String
+  userId        String
+
+  createdAt     DateTime @default(now())
+}
+
+//-----------------event specific----------------
+// Business Hackathon Event (Event ID: 1)
+model BusinessHackathon {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName              String
+  teamLeaderName        String
+  teamLeaderEmail       String   @unique
+  teamLeaderPhone       String
+  teamLeaderScholarId   String?
+  collegeType           String   // "nit_silchar" or "other"
+  collegeName           String?  // Required if collegeType is "other"
+  department            String?
+  year                  String?
+  teamMembers           BusinessTeamMember[]
+  createdAt             DateTime @default(now())
+}
+
+type BusinessTeamMember {
+  name      String
+  phone     String
+  scholarId String?
+}
+
+// Treasure Hunt Event (Event ID: 2)
+model TreasureHunt {
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName                  String
+  teamLeaderName            String
+  teamLeaderEmail           String   @unique
+  teamLeaderPhone           String
+  teamLeaderScholarId       String?
+  teamViceCaptainName       String
+  teamViceCaptainPhone      String
+  teamViceCaptainScholarId  String?
+  collegeType               String   // "nit_silchar" or "other"
+  collegeName               String?  // Required if collegeType is "other"
+  department                String?
+  year                      String?
+  teamMembers               TreasureTeamMember[]
+  createdAt                 DateTime @default(now())
+}
+
+type TreasureTeamMember {
+  name      String
+  scholarId String?
+}
+
+// BID-WISE Event (Event ID: 3)
+model BidWise {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName              String
+  teamLeaderName        String
+  teamLeaderEmail       String   @unique
+  teamLeaderPhone       String
+  teamLeaderScholarId   String?
+  collegeType           String   // "nit_silchar" or "other"
+  collegeName           String?  // Required if collegeType is "other"
+  department            String?
+  year                  String?
+  teamMembers           BidWiseTeamMember[]
+  createdAt             DateTime @default(now())
+}
+
+type BidWiseTeamMember {
+  name  String
+  phone String
+}
+
+// Adovation Event (Event ID: 4)
+model Adovation {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName              String
+  teamLeaderName        String
+  teamLeaderEmail       String   @unique
+  teamLeaderPhone       String
+  teamLeaderScholarId   String?
+  collegeType           String   // "nit_silchar" or "other"
+  collegeName           String?  // Required if collegeType is "other"
+  department            String?
+  year                  String?
+  teamMembers           AdovationTeamMember[]
+  createdAt             DateTime @default(now())
+}
+
+type AdovationTeamMember {
+  name      String
+  phone     String
+  scholarId String?
+}
+
+// Startup Expo Event (Event ID: 5)
+model StartupExpo {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName              String
+  teamLeaderName        String
+  teamLeaderEmail       String   @unique
+  teamLeaderPhone       String
+  teamLeaderScholarId   String?
+  businessDescription   String
+  driveLink             String?
+  collegeType           String   // "nit_silchar" or "other"
+  collegeName           String?  // Required if collegeType is "other"
+  department            String?
+  year                  String?
+  teamMembers           StartupExpoTeamMember[]
+  createdAt             DateTime @default(now())
+}
+
+type StartupExpoTeamMember {
+  name      String
+  phone     String
+  scholarId String?
+}
+
+// Team Member Collections for validation
+// Business Hackathon Members
+model BusinessHackathonMembers {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  memberName            String
+  memberEmail           String?
+  memberPhone           String
+  teamName              String
+  createdAt             DateTime @default(now())
+  
+  // Compound index to prevent duplicate registrations
+  @@unique([memberPhone, memberName])
+}
+
+// Treasure Hunt Members
+model TreasureHuntMembers {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  memberName            String
+  memberEmail           String?
+  memberPhone           String?
+  teamName              String
+  createdAt             DateTime @default(now())
+  
+  // Compound index to prevent duplicate registrations
+  @@unique([memberName, memberPhone])
+}
+
+// BID-WISE Members
+model BidWiseMembers {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  memberName            String
+  memberEmail           String?
+  memberPhone           String
+  teamName              String
+  createdAt             DateTime @default(now())
+  
+  // Compound index to prevent duplicate registrations
+  @@unique([memberPhone, memberName])
+}
+
+// Adovation Members
+model AdovationMembers {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  memberName            String
+  memberEmail           String?
+  memberPhone           String
+  teamName              String
+  createdAt             DateTime @default(now())
+  
+  // Compound index to prevent duplicate registrations
+  @@unique([memberPhone, memberName])
+}
+//-------------------------------------------------------------------

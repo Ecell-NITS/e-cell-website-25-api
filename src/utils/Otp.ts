@@ -1,91 +1,135 @@
-import { Request, Response, NextFunction } from "express";
-import sendEmail from "./SendEmail";
-import { PrismaClient } from "@prisma/client";
+import { Request, Response, NextFunction } from 'express';
+import { sendEmail } from './email';
+import prisma from '../../prisma/client'; // Use singleton
+import { AppError } from './AppError';
+import crypto from 'crypto';
+import { Buffer } from 'node:buffer';
+import { z } from 'zod';
 
-const prisma = new PrismaClient();
+// Validation schemas
+const sendOtpSchema = z.object({
+  email: z.string().email('Invalid email format').toLowerCase().trim(),
+});
 
-export const sendOtp = async (req: Request, res: Response) => {
+const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email format').toLowerCase().trim(),
+  otp: z
+    .string()
+    .length(6, 'OTP must be 6 digits')
+    .regex(/^\d{6}$/, 'OTP must contain only numbers'),
+});
+
+export const sendOtp = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { email } = req.body;
-    
-    // Generate 6 digit OTP
-    let otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log(`OTP for ${email} is ${otp}`);
+    const { email } = sendOtpSchema.parse(req.body);
 
-    // Delete any old OTPs for this email
-    const otpPrev = await prisma.otp.deleteMany({
+    // Check for recent OTP requests (rate limiting at function level)
+    const recentOtp = await prisma.otp.findFirst({
       where: {
-        email
-      }
-    });
-    console.log("Deleted previous OTPs:", otpPrev);
-
-    // Create new OTP
-    const otpSent = await prisma.otp.create({
-      data: {
         email,
-        otp,
+        createdAt: {
+          gte: new Date(Date.now() - 60000), // Within last minute
+        },
       },
     });
 
-    if (!otpSent) {
-      res.status(400).json({ message: "OTP not sent" });
-      return;
+    if (recentOtp) {
+      return next(
+        new AppError('Please wait 1 minute before requesting another OTP', 429)
+      );
     }
 
-    // Send Email
-    sendEmail(email, "OTP for verification", `Your OTP is ${otp}. It will expire in 5 minutes.`, "");
-    
-    res.status(200).json({ message: "OTP sent successfully" });
+    // Generate cryptographically secure OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
 
-    // Auto-delete after 5 minutes
-    setTimeout(async () => {
-      const otpData = await prisma.otp.findFirst({
-        where: { email },
-      });
-      if (!otpData) return;
-      
-      await prisma.otp.deleteMany({
-        where: { id: otpSent.id },
-      });
-    }, 60000 * 5);
+    // Only log in development (never log actual OTP in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[DEV] OTP for ${email}: ${otp}`);
+    }
 
+    // Delete old OTPs and create new one in a transaction
+    const otpRecord = await prisma.$transaction(async tx => {
+      await tx.otp.deleteMany({ where: { email } });
+      return tx.otp.create({
+        data: {
+          email,
+          otp,
+        },
+      });
+    });
+
+    // Send email (handle failures properly)
+    try {
+      await sendEmail({
+        email,
+        subject: 'E-Cell - Verification Code',
+        message: `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you didn't request this, please ignore this email.`,
+      });
+    } catch (emailError) {
+      console.error('Email send failed:', emailError);
+      // Delete OTP since email failed
+      await prisma.otp.delete({ where: { id: otpRecord.id } });
+      return next(new AppError('Failed to send OTP. Please try again.', 500));
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'OTP sent successfully to your email',
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error); // Simply pass all errors to global handler
   }
 };
 
-export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
-  const { email, otp } = req.body;
+export const verifyOtp = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    console.log(`Verifying OTP for ${email}: ${otp}`);
-    
-    const otpData = await prisma.otp.findFirst({
+    // Validate and sanitize input
+    const { email, otp } = verifyOtpSchema.parse(req.body);
+
+    // Fetch most recent OTP for this email
+    const otpRecord = await prisma.otp.findFirst({
       where: { email },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!otpData) {
-      // Changed to return to avoid 'void' conflict in Express types
-      res.status(400).json({ message: "OTP not found or expired" });
-      return; 
+    if (!otpRecord) {
+      return next(new AppError('OTP not found or expired', 400));
     }
 
-    if (otpData.otp !== otp) {
-      res.status(400).json({ message: "OTP not matched" });
-      return;
+    // Check if OTP has expired (5 minutes)
+    const otpAge = Date.now() - new Date(otpRecord.createdAt).getTime();
+    if (otpAge > 5 * 60 * 1000) {
+      await prisma.otp.delete({ where: { id: otpRecord.id } });
+      return next(
+        new AppError('OTP has expired. Please request a new one.', 400)
+      );
     }
 
-    // OTP Matched - Delete it so it can't be used again
-    if (otpData.otp === otp) {
-      await prisma.otp.delete({
-        where: { id: otpData.id },
-      });
+    // Constant-time comparison to prevent timing attacks
+    const otpBuffer = Buffer.from(otp);
+    const storedBuffer = Buffer.from(otpRecord.otp);
+
+    if (
+      otpBuffer.length !== storedBuffer.length ||
+      !crypto.timingSafeEqual(otpBuffer, storedBuffer)
+    ) {
+      return next(new AppError('Invalid OTP', 400));
     }
-    
-    next(); // Proceed to the controller
+
+    // OTP is valid - delete it (one-time use)
+    await prisma.otp.delete({ where: { id: otpRecord.id } });
+
+    // Pass to next middleware/controller
+    next();
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error); // Simply pass all errors to global handler
   }
 };

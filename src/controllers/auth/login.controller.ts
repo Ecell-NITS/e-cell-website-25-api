@@ -7,7 +7,7 @@ import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import { loginSchema } from '../../validators/auth.validator';
 
-const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000; // Changed from TWO_WEEKS
 
 export const login = async (
   req: Request,
@@ -18,6 +18,14 @@ export const login = async (
     const { email, password } = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
 
+    // Security: Prevent password login if user registered with Google
+    if (user && user.googleId && !user.password) {
+      throw new AppError(
+        'This account uses Google Sign-In. Please login with Google.',
+        403
+      );
+    }
+
     if (
       !user ||
       !user.password ||
@@ -25,7 +33,6 @@ export const login = async (
     ) {
       throw new AppError('Incorrect email or password', 401);
     }
-    if (!user.isVerified) throw new AppError('Email not verified', 401);
 
     const accessToken = jwt.sign(
       { id: user.id, role: user.role },
@@ -39,7 +46,7 @@ export const login = async (
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + ONE_WEEK),
+        expiresAt: new Date(Date.now() + THIRTY_DAYS), // Changed
       },
     });
 
@@ -47,15 +54,13 @@ export const login = async (
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: THIRTY_DAYS, // Changed
       path: '/',
     });
 
     // 👇 FIX FOR ITEM #4: Sanitize the user object
     const userResponse: Record<string, unknown> = { ...user };
     userResponse.password = undefined;
-    userResponse.otp = undefined;
-    userResponse.otpExpires = undefined;
 
     // Send sanitized userResponse instead of raw user
     res
@@ -101,7 +106,7 @@ export const refresh = async (
       data: {
         token: newRefreshToken,
         userId: storedToken.userId,
-        expiresAt: new Date(Date.now() + ONE_WEEK),
+        expiresAt: new Date(Date.now() + THIRTY_DAYS), // Changed
       },
     });
 

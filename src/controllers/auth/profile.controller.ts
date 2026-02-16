@@ -51,7 +51,6 @@ export const updateProfile = async (
         linkedin: true,
         github: true,
         role: true,
-        isVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -89,7 +88,6 @@ export const getAllUsers = async (
         name: true,
         email: true,
         role: true,
-        isVerified: true,
         picture: true,
         createdAt: true,
         // Passwords & OTPs are excluded

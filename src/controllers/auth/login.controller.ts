@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma from '../../../prisma/client';
+import prisma from '../../utils/prisma';
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
@@ -35,10 +35,17 @@ export const login = async (
     }
 
     const accessToken = jwt.sign(
-      { id: user.id, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: '7d' }
     );
+
+    // Delete all previous refresh tokens for this user
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
 
     const refreshToken = crypto.randomBytes(40).toString('hex');
 
@@ -46,7 +53,7 @@ export const login = async (
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + THIRTY_DAYS), // Changed
+        expiresAt: new Date(Date.now() + THIRTY_DAYS),
       },
     });
 
@@ -92,12 +99,22 @@ export const refresh = async (
       throw new AppError('Invalid token', 401);
     }
 
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Delete the used token + any expired tokens for this user
+    await prisma.refreshToken.deleteMany({
+      where: {
+        userId: storedToken.userId,
+        OR: [{ id: storedToken.id }, { expiresAt: { lt: new Date() } }],
+      },
+    });
 
     const accessToken = jwt.sign(
-      { id: storedToken.userId, role: storedToken.user.role },
+      {
+        id: storedToken.user.id,
+        email: storedToken.user.email,
+        role: storedToken.user.role,
+      },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: '7d' }
     );
 
     const newRefreshToken = crypto.randomBytes(40).toString('hex');
@@ -113,7 +130,17 @@ export const refresh = async (
     res.cookie('refreshToken', newRefreshToken, { httpOnly: true, path: '/' });
     res.status(200).json({ status: 'success', data: { accessToken } });
   } catch (error) {
-    next(error);
+    console.error('LOGIN ERROR:', error);
+
+    if (error instanceof AppError) {
+      return next(error);
+    }
+
+    if (error instanceof Error) {
+      return next(new AppError(error.message, 400));
+    }
+
+    return next(new AppError('Internal Server Error', 500));
   }
 };
 
@@ -124,8 +151,17 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    if (refreshToken)
-      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    if (refreshToken) {
+      // Find the token to get the userId, then delete ALL tokens for that user
+      const storedToken = await prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+      });
+      if (storedToken) {
+        await prisma.refreshToken.deleteMany({
+          where: { userId: storedToken.userId },
+        });
+      }
+    }
     res.clearCookie('refreshToken');
     res.status(200).json({ status: 'success', message: 'Logged out' });
   } catch (error) {

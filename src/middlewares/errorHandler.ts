@@ -7,11 +7,13 @@ export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
-  _next: NextFunction
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  next: NextFunction
 ) => {
   let statusCode = 500;
   let message = 'Internal Server Error';
-  let errors: Record<string, unknown> | undefined = undefined;
+  let errors: unknown[] | undefined = undefined;
 
   if (err instanceof AppError) {
     statusCode = err.statusCode;
@@ -20,7 +22,7 @@ export const errorHandler = (
     statusCode = 400;
     message = 'Validation Error';
     // Provide detailed field-level errors
-    errors = err.errors.map(e => ({
+    errors = err.issues.map(e => ({
       field: e.path.join('.'),
       message: e.message,
     }));

@@ -44,13 +44,16 @@ export const login = async (
       { expiresIn: '7d' }
     );
 
+    // Delete all previous refresh tokens for this user
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+
     const refreshToken = crypto.randomBytes(40).toString('hex');
 
     await prisma.refreshToken.create({
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + THIRTY_DAYS), // Changed
+        expiresAt: new Date(Date.now() + THIRTY_DAYS),
       },
     });
 
@@ -96,7 +99,13 @@ export const refresh = async (
       throw new AppError('Invalid token', 401);
     }
 
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Delete the used token + any expired tokens for this user
+    await prisma.refreshToken.deleteMany({
+      where: {
+        userId: storedToken.userId,
+        OR: [{ id: storedToken.id }, { expiresAt: { lt: new Date() } }],
+      },
+    });
 
     const accessToken = jwt.sign(
       {
@@ -142,8 +151,17 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    if (refreshToken)
-      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    if (refreshToken) {
+      // Find the token to get the userId, then delete ALL tokens for that user
+      const storedToken = await prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+      });
+      if (storedToken) {
+        await prisma.refreshToken.deleteMany({
+          where: { userId: storedToken.userId },
+        });
+      }
+    }
     res.clearCookie('refreshToken');
     res.status(200).json({ status: 'success', message: 'Logged out' });
   } catch (error) {

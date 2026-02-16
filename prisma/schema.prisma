@@ -21,19 +21,14 @@ model User {
 
 
   isVerified   Boolean   @default(false) 
-  otp          String?   
-  otpExpires   DateTime?
   userimg    String?
   bio        String?
-  position   String?
   linkedin   String?
   github     String?
   instagram  String?
   facebook   String?
 
 
-  passwordResetToken   String?
-  passwordResetExpires DateTime?
   refreshTokens        RefreshToken[]
 
   createdAt DateTime @default(now())
@@ -50,7 +45,6 @@ model RefreshToken {
 
   expiresAt   DateTime
   revoked     Boolean  @default(false)
-  replacedByToken String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

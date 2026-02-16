@@ -129,6 +129,7 @@ export const register = async (
           password: hashedPassword,
           name: data.name,
           bio: data.bio,
+          isVerified: true, // Since OTP is verified
           linkedin: data.linkedin,
           github: data.github,
           instagram: data.instagram,
@@ -140,7 +141,6 @@ export const register = async (
           email: true,
           role: true,
           bio: true,
-          position: true,
           linkedin: true,
           github: true,
           instagram: true,

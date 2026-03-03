@@ -43,6 +43,8 @@ export const updatePassSchema = z.object({
 export const updateProfileSchema = z.object({
   name: z.string().min(2).optional(),
   bio: z.string().optional(),
+  picture: z.string().optional(),
+  role: z.string().optional(),
   linkedin: z.string().optional(),
   github: z.string().optional(),
   instagram: z.string().optional(),

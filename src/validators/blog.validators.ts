@@ -16,6 +16,9 @@ export const createBlogSchema = z.object({
   content: z.string().optional(),
   tag: z.string().optional(),
   writerName: z.string().optional(),
+  likes: z.array(z.string()).optional(),
+  authorId: z.string().optional(),
+  status: z.string().optional(),
 });
 
 /* createApiBlog */

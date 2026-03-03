@@ -35,9 +35,15 @@ export const getMe = async (req: Request, res: Response) => {
     throw new AppError('User not found', 404);
   }
 
+  // Return a unified 'picture' field — prefer userimg over Google picture
+  const unifiedUser = {
+    ...user,
+    picture: user.userimg || user.picture || '',
+  };
+
   res.status(200).json({
     status: 'success',
-    data: { user },
+    data: { user: unifiedUser },
   });
 };
 
@@ -96,26 +102,51 @@ export const updateProfile = async (
 
     const data = updateProfileSchema.parse(req.body);
 
+    // Only allow ADMIN or SUPERADMIN to update role
+    if (data.role) {
+      const requesterRole = req.user.role;
+      if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPERADMIN') {
+        throw new AppError('Only admins can update the position/role', 403);
+      }
+    }
+
+    // If a picture URL is provided, save it to 'userimg' (user-uploaded) field
+    // and clear the Google 'picture' field to avoid duplicates
+    const prismaData: Record<string, unknown> = { ...data };
+    if (data.picture) {
+      prismaData.userimg = data.picture;
+      delete prismaData.picture;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: req.user.id },
-      data,
+      data: prismaData,
       select: {
         id: true,
         name: true,
         email: true,
         bio: true,
         picture: true,
+        userimg: true,
         linkedin: true,
         github: true,
+        instagram: true,
+        facebook: true,
         role: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
+    // Return unified picture field
+    const unifiedUser = {
+      ...updatedUser,
+      picture: updatedUser.userimg || updatedUser.picture || '',
+    };
+
     res.status(200).json({
       status: 'success',
-      data: { user: updatedUser },
+      data: { user: unifiedUser },
     });
   } catch (error) {
     next(error);

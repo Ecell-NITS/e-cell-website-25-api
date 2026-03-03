@@ -11,7 +11,9 @@ if (!process.env.JWT_SECRET) {
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: Number(process.env.PORT) || 4000,
-  CLIENT_URL: process.env.CLIENT_URL ?? 'http://localhost:5173',
+  CLIENT_URL: process.env.CLIENT_URL ?? 'http://localhost:3000',
+  BACKEND_URL:
+    process.env.BACKEND_URL ?? `http://localhost:${process.env.PORT || 4000}`,
   DATABASE_URL: process.env.DATABASE_URL ?? '',
 
   // 🔑 JWT (NON-OPTIONAL NOW)

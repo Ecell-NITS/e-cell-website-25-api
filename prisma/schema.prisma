@@ -93,6 +93,10 @@ model Blog {
 
   subject     String?
   text        String?
+
+  likes       String[] @default([])
+  authorId    String?
+  status      String?  @default("draft")
 }
 
 

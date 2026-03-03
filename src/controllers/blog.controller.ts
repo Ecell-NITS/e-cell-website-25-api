@@ -16,6 +16,9 @@ export const createBlog = async (req: Request, res: Response) => {
         subject: true,
         text: true,
         isAccepted: true,
+        likes: true,
+        authorId: true,
+        status: true,
       },
     });
 
@@ -224,6 +227,54 @@ export const getBlogById = async (req: Request, res: Response) => {
   }
 };
 
+function toSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export const getBlogBySlug = async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug || Array.isArray(slug)) {
+    return res.status(400).json({ error: 'Invalid slug.' });
+  }
+  try {
+    const blogs = await prisma.blog.findMany();
+    const blog = blogs.find(b => toSlug(b.title ?? '') === slug);
+    if (blog) res.status(200).json(blog);
+    else res.status(404).json({ error: 'Blog not found.' });
+  } catch {
+    res.status(500).json({ error: 'Error fetching blog.' });
+  }
+};
+
+// Get blogs for the authenticated user (by writerEmail or authorId)
+export const getMyBlogs = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  const userEmail = req.user?.email;
+
+  if (!userId && !userEmail) {
+    return res.status(401).json({ error: 'Not authenticated.' });
+  }
+
+  try {
+    const blogs = await prisma.blog.findMany({
+      where: {
+        OR: [
+          ...(userEmail ? [{ writerEmail: userEmail }] : []),
+          ...(userId ? [{ authorId: userId }] : []),
+        ],
+      },
+      orderBy: { timeStamp: 'desc' },
+    });
+
+    return res.status(200).json({ status: 'success', data: blogs });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 // Get Accepted Blogs (returns all accepted blogs)
 export const getAcceptedBlogs = async (_req: Request, res: Response) => {
   try {
@@ -298,5 +349,48 @@ export const editBlog = async (req: Request, res: Response) => {
     res.status(200).json({ message: 'Updated successfully.', blog: updated });
   } catch {
     res.status(500).json({ error: 'Failed to update.' });
+  }
+};
+
+// Toggle Like on a Blog
+export const toggleLike = async (req: Request, res: Response) => {
+  const { blogId } = req.params;
+  if (!blogId || Array.isArray(blogId)) {
+    return res.status(400).json({ error: 'Invalid blog ID.' });
+  }
+
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Not authenticated.' });
+  }
+
+  try {
+    const blog = await prisma.blog.findUnique({
+      where: { id: blogId },
+      select: { likes: true },
+    });
+
+    if (!blog) {
+      return res.status(404).json({ error: 'Blog not found.' });
+    }
+
+    const alreadyLiked = blog.likes.includes(userId);
+    const updatedLikes = alreadyLiked
+      ? blog.likes.filter(id => id !== userId)
+      : [...blog.likes, userId];
+
+    const updated = await prisma.blog.update({
+      where: { id: blogId },
+      data: { likes: updatedLikes },
+      select: { likes: true },
+    });
+
+    return res.status(200).json({
+      message: alreadyLiked ? 'Unliked' : 'Liked',
+      liked: !alreadyLiked,
+      likesCount: updated.likes.length,
+    });
+  } catch {
+    return res.status(500).json({ error: 'Failed to toggle like.' });
   }
 };

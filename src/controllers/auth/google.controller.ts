@@ -5,7 +5,7 @@ import prisma from '../../utils/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 
-const BACKEND_URL = `http://localhost:${env.PORT}`;
+const BACKEND_URL = env.BACKEND_URL;
 
 const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -91,13 +91,17 @@ export const googleCallback = async (
     });
 
     if (user) {
-      // Update googleId & picture if not already set
-      if (!user.googleId || !user.picture) {
+      // Only update googleId if missing; only set picture if user has NO existing image
+      const needsUpdate = !user.googleId || (!user.userimg && !user.picture);
+      if (needsUpdate) {
         user = await prisma.user.update({
           where: { email: googleUser.email },
           data: {
             googleId: user.googleId ?? googleUser.id,
-            picture: user.picture ?? googleUser.picture,
+            // Only set Google picture if user has no image at all
+            ...(!user.userimg && !user.picture
+              ? { picture: googleUser.picture }
+              : {}),
             isVerified: true,
           },
         });
@@ -136,18 +140,18 @@ export const googleCallback = async (
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: ONE_WEEK,
       path: '/',
     });
 
-    // Sanitize user for frontend
+    // Sanitize user for frontend — prefer userimg over Google picture
     const safeUser = {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-      picture: user.picture,
+      picture: user.userimg || user.picture || '',
       isVerified: user.isVerified,
     };
 

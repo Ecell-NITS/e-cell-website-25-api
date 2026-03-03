@@ -24,9 +24,7 @@ export const env = {
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? '',
 
-  // Email
-  EMAIL_HOST: process.env.EMAIL_HOST,
-  EMAIL_PORT: process.env.EMAIL_PORT,
-  EMAIL_USERNAME: process.env.EMAIL_USERNAME,
-  EMAIL_PASSWORD: process.env.EMAIL_PASSWORD,
+  // Email (Brevo)
+  BREVO_API_KEY: process.env.BREVO_API_KEY ?? '',
+  BREVO_EMAIL: process.env.BREVO_EMAIL ?? '',
 } as const;

@@ -56,6 +56,24 @@ export const createApiComment = async (
       },
     });
 
+    try {
+      await prisma.blog.update({
+        where: { id: Id },
+        data: { commentCount: { increment: 1 } },
+      });
+    } catch {
+      // Ignore if not found in Blog
+    }
+
+    try {
+      await prisma.publicBlog.update({
+        where: { id: Id },
+        data: { commentCount: { increment: 1 } },
+      });
+    } catch {
+      // Ignore if not found in PublicBlog
+    }
+
     return res.status(201).json({
       message: 'Comment added successfully',
       data: comment,

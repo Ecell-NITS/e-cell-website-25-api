@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { protect } from '../middlewares/authMiddleware';
 import {
   createBlog,
   myPublishedBlogs,
@@ -11,16 +12,19 @@ import {
   publishBlog,
   deleteBlog,
   editBlog,
+  toggleLike,
 } from '../controllers/blog.controller';
 
 const blogRoutes = Router();
 
-blogRoutes.post('/createBlog', createBlog);
+blogRoutes.post('/like/:postId', protect, toggleLike);
+
+blogRoutes.post('/createBlog', protect, createBlog);
 blogRoutes.get('/myPublishedBlogs', myPublishedBlogs);
 blogRoutes.get('/publicWrittenBlog/:authoruniqueid', publicWrittenBlog);
 blogRoutes.get('/tagSpecificBlogList/:tagName', tagSpecificBlogList);
 // blogRoutes.post('/apiBlogs/:blogId', createApiBlog);
-blogRoutes.post('/apiBlogs', createApiBlog);
+blogRoutes.post('/apiBlogs', protect, createApiBlog);
 
 blogRoutes.get('/getblogs', getBlogs);
 blogRoutes.get('/getblogs/:blogId', getBlogById);

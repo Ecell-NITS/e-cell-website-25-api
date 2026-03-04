@@ -283,6 +283,91 @@ export const deleteBlog = async (req: Request, res: Response) => {
   }
 };
 
+// Toggle Like
+export const toggleLike = async (req: Request, res: Response) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user?.id;
+
+    if (!postId || typeof postId !== 'string') {
+      return res
+        .status(400)
+        .json({ message: 'postId is required and must be a string' });
+    }
+
+    if (!userId || typeof userId !== 'string') {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const existingLike = await prisma.like.findUnique({
+      where: {
+        postId_userId: {
+          postId,
+          userId,
+        },
+      },
+    });
+
+    if (existingLike) {
+      // Unlike
+      await prisma.like.delete({
+        where: { id: existingLike.id },
+      });
+
+      try {
+        await prisma.blog.update({
+          where: { id: postId },
+          data: { likeCount: { decrement: 1 } },
+        });
+      } catch {
+        // Ignore if not found
+      }
+
+      try {
+        await prisma.publicBlog.update({
+          where: { id: postId },
+          data: { likeCount: { decrement: 1 } },
+        });
+      } catch {
+        // Ignore if not found
+      }
+
+      return res.status(200).json({ message: 'Unliked successfully' });
+    } else {
+      // Like
+      await prisma.like.create({
+        data: {
+          postId,
+          userId,
+        },
+      });
+
+      try {
+        await prisma.blog.update({
+          where: { id: postId },
+          data: { likeCount: { increment: 1 } },
+        });
+      } catch {
+        // Ignore if not found
+      }
+
+      try {
+        await prisma.publicBlog.update({
+          where: { id: postId },
+          data: { likeCount: { increment: 1 } },
+        });
+      } catch {
+        // Ignore if not found
+      }
+
+      return res.status(200).json({ message: 'Liked successfully' });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // Edit Blog
 export const editBlog = async (req: Request, res: Response) => {
   const { blogId } = req.params;

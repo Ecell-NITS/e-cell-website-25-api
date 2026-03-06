@@ -2,32 +2,103 @@ import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 import { createBlogSchema } from '../validators/blog.validators';
 import { createApiBlogSchema } from '../validators/blog.validators';
+import { sendEmail } from '../utils/email';
+import { env } from '../config/env';
+
+const buildBlogNotificationHtml = (
+  title: string,
+  authorName: string,
+  authorEmail: string,
+  preview: string
+): string => {
+  const reviewUrl = `${env.CLIENT_URL}/admin/blogs`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /></head>
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;">
+  <div style="max-width:560px;margin:20px auto;padding:0;">
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
+      Hi Team,
+    </p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
+      A new blog has been submitted for review on the E-Cell NIT Silchar website.
+    </p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 4px;"><strong>Title:</strong> ${title}</p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 4px;"><strong>Author:</strong> ${authorName}</p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;"><strong>Email:</strong> ${authorEmail}</p>
+    <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 4px;"><strong>Preview:</strong></p>
+    <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 20px;padding-left:8px;border-left:3px solid #ddd;">${preview}</p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
+      Please review and approve/reject it here:<br />
+      <a href="${reviewUrl}" style="color:#1a73e8;">${reviewUrl}</a>
+    </p>
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:24px 0 0;">
+      Best regards,<br />
+      E-Cell NIT Silchar
+    </p>
+  </div>
+</body>
+</html>`;
+};
 
 export const createBlog = async (req: Request, res: Response) => {
   try {
     const validatedData = createBlogSchema.parse(req.body);
 
+    const userId = req.user?.id;
+
+    // Look up the authenticated user to get their real name/email
+    const authUser = userId
+      ? await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, email: true, picture: true, userimg: true },
+        })
+      : null;
+
+    const authorName =
+      authUser?.name || validatedData.writerName || 'Anonymous';
+    const authorEmail = authUser?.email || validatedData.writerEmail || '';
+    const authorPic =
+      authUser?.userimg || authUser?.picture || validatedData.writerPic;
+
     const blog = await prisma.blog.create({
-      data: validatedData,
-      select: {
-        id: true,
-        title: true,
-        writerEmail: true,
-        subject: true,
-        text: true,
-        isAccepted: true,
-        likes: true,
-        authorId: true,
-        status: true,
+      data: {
+        ...validatedData,
+        authorId: userId,
+        writerName: authorName,
+        writerEmail: authorEmail,
+        writerPic: authorPic,
+        isAccepted: false,
+        status: 'pending',
+        timeStamp: new Date().toISOString(),
       },
     });
 
+    // Send notification email to admin
+    try {
+      await sendEmail({
+        email: 'ecell@nits.ac.in', // Admin email
+        subject: `New Blog Pending Review: ${blog.title}`,
+        message: `A new blog "${blog.title}" by ${authorName} (${authorEmail}) has been submitted and needs verification.`,
+        html: buildBlogNotificationHtml(
+          blog.title ?? 'Untitled',
+          authorName,
+          authorEmail,
+          blog.intro ??
+            blog.content?.replace(/<[^>]*>/g, '').slice(0, 200) ??
+            ''
+        ),
+      });
+    } catch (emailErr) {
+      console.error('Failed to send blog notification email:', emailErr);
+    }
+
     return res.status(201).json({
-      message: 'Blog created successfully',
+      message: 'Blog created successfully and sent for review',
       data: blog,
     });
   } catch (error) {
-    console.error('FULL ERROR:', error);
+    console.error('Blog creation error:', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Internal server error',
     });
@@ -234,6 +305,43 @@ function toSlug(title: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+// Get a draft/pending blog by ID — only the author or admin/superadmin can view
+export const getDraftBlog = async (req: Request, res: Response) => {
+  const { blogId } = req.params;
+  if (!blogId || Array.isArray(blogId)) {
+    return res.status(400).json({ error: 'Invalid Blog ID.' });
+  }
+
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+
+  try {
+    const blog = await prisma.blog.findUnique({ where: { id: blogId } });
+    if (!blog) {
+      return res.status(404).json({ error: 'Blog not found.' });
+    }
+
+    // If already published, redirect to public view
+    if (blog.isAccepted) {
+      return res.status(200).json({ status: 'success', data: blog });
+    }
+
+    // Only author or admin/superadmin can view drafts
+    const isOwner = userId && blog.authorId === userId;
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: 'You do not have permission to view this blog.' });
+    }
+
+    return res.status(200).json({ status: 'success', data: blog });
+  } catch {
+    return res.status(500).json({ error: 'Error fetching blog.' });
+  }
+};
+
 export const getBlogBySlug = async (req: Request, res: Response) => {
   const { slug } = req.params;
   if (!slug || Array.isArray(slug)) {
@@ -288,10 +396,9 @@ export const getAcceptedBlogs = async (_req: Request, res: Response) => {
   }
 };
 
-// Publish Blog
+// Publish Blog (Admin approves a blog)
 export const publishBlog = async (req: Request, res: Response) => {
   const { Id } = req.params;
-  const { email, writerName, subject, text } = req.body;
   if (!Id || Array.isArray(Id)) {
     return res.status(400).json({ error: 'Invalid Blog ID.' });
   }
@@ -299,23 +406,22 @@ export const publishBlog = async (req: Request, res: Response) => {
   try {
     const blog = await prisma.blog.findUnique({ where: { id: Id } });
     if (!blog) return res.status(404).json({ error: 'Blog not found.' });
-    if (blog.writerEmail !== email)
-      return res.status(403).json({ error: 'Unauthorized.' });
 
     const updated = await prisma.blog.update({
       where: { id: Id },
-      data: { subject, text, writerName, isAccepted: true },
+      data: { isAccepted: true, status: 'published' },
     });
-    res.status(200).json({ message: 'Published successfully.', blog: updated });
+    res
+      .status(200)
+      .json({ message: 'Blog approved successfully.', blog: updated });
   } catch {
-    res.status(500).json({ error: 'Failed to publish.' });
+    res.status(500).json({ error: 'Failed to approve blog.' });
   }
 };
 
 // Delete Blog
 export const deleteBlog = async (req: Request, res: Response) => {
   const { blogId } = req.params;
-  const { email, writerName } = req.body;
   if (!blogId || Array.isArray(blogId)) {
     return res.status(400).json({ error: 'Invalid Blog ID.' });
   }
@@ -323,9 +429,6 @@ export const deleteBlog = async (req: Request, res: Response) => {
   try {
     const blog = await prisma.blog.findUnique({ where: { id: blogId } });
     if (!blog) return res.status(404).json({ error: 'Blog not found.' });
-    if (blog.writerEmail !== email || blog.writerName !== writerName) {
-      return res.status(403).json({ error: 'Unauthorized.' });
-    }
 
     await prisma.blog.delete({ where: { id: blogId } });
     res.status(200).json({ message: 'Deleted successfully.' });

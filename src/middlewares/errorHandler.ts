@@ -35,18 +35,17 @@ export const errorHandler = (
     }
   }
 
-  // Log errors appropriately based on environment
-  if (process.env.NODE_ENV === 'development') {
+  // Log only unexpected (non-operational) errors; skip routine AppErrors like 401s
+  if (err instanceof AppError && err.isOperational) {
+    // Operational errors (bad input, auth failures, etc.) — no need to log
+  } else if (process.env.NODE_ENV === 'development') {
     console.error('💥 Error:', err);
   } else {
-    // In production, only log unexpected errors
-    if (!(err instanceof AppError)) {
-      console.error('💥 Unexpected Error:', {
-        message: err.message,
-        stack: err.stack,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    console.error('💥 Unexpected Error:', {
+      message: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   res.status(statusCode).json({

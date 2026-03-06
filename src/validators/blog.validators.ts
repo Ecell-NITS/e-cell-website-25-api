@@ -16,6 +16,8 @@ export const createBlogSchema = z.object({
   content: z.string().optional(),
   tag: z.string().optional(),
   writerName: z.string().optional(),
+  writerPic: z.string().url().optional(),
+  topicPic: z.string().url().optional(),
   likes: z.array(z.string()).optional(),
   authorId: z.string().optional(),
   status: z.string().optional(),

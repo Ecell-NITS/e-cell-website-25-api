@@ -12,6 +12,8 @@ import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/userRoutes';
 import adminRoutes from './routes/adminRoutes';
 import queryRoutes from './routes/queryRoutes';
+import newsletterRoutes from './routes/newsletterRoutes';
+import uploadRoutes from './routes/upload.routes';
 
 import adovationRoutes from './routes/events/adovation.routes';
 import bidwiseRoutes from './routes/events/bidwise.routes';
@@ -56,6 +58,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/query', queryRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/upload', uploadRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/comment', commentRoutes);
 

@@ -74,6 +74,14 @@ model Otp {
   createdAt DateTime @default(now())
 }
 
+model Newsletter {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("newsletters")
+}
+
 
 
 model Blog {

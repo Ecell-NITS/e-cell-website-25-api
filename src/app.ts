@@ -20,6 +20,7 @@ import bidwiseRoutes from './routes/events/bidwise.routes';
 import startupExpoRoutes from './routes/events/startupExpo.routes';
 import businessHackathonRoutes from './routes/events/businessHackathon.routes';
 import treasureApplyRoutes from './routes/events/treasureApply.routes';
+import recruitmentRoutes from './routes/recruitment.routes';
 
 const app = express();
 
@@ -69,6 +70,9 @@ app.use('/api/events/bidwise', bidwiseRoutes);
 app.use('/api/events/startupexpo', startupExpoRoutes);
 app.use('/api/events/businesshackathon', businessHackathonRoutes);
 app.use('/api/events/treasurehunt', treasureApplyRoutes);
+
+// Recruitment
+app.use('/api/recruitment', recruitmentRoutes);
 
 // ── Global error handler (MUST be last) ──
 app.use(errorHandler);

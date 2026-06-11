@@ -322,7 +322,7 @@ export const getApplicationById = async (
 ) => {
   try {
     const application = await prisma.recruitmentApplication.findUnique({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       include: {
         user: {
           select: {

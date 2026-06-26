@@ -108,6 +108,14 @@ export const submitTechApplication = async (
       taskGithubRepoLink,
       taskSelection,
     } = req.body;
+
+    // ── Registration closed for AI domain ──
+    if (techDomain === 'AI') {
+      return next(
+        new AppError('Registration for the AI domain is closed.', 403)
+      );
+    }
+
     const userId = req.user?.id || null;
 
     const existing = await prisma.recruitmentApplication.findUnique({
@@ -180,6 +188,12 @@ export const submitOtherApplication = async (
   next: NextFunction
 ) => {
   try {
+    // ── Registration closed for Non-Technical teams ──
+    return next(
+      new AppError('Registration for Non-Technical teams is closed.', 403)
+    );
+
+    /* eslint-disable no-unreachable */
     const {
       name,
       email,

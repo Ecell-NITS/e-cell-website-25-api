@@ -47,6 +47,13 @@ export const saveTechDraft = async (
     } = req.body;
     const userId = req.user?.id || null;
 
+    // ── Registration closed for all Tech domains ──
+    return res.status(403).json({
+      status: 'error',
+      message: 'Registration for all Technical domains is closed.',
+    });
+
+    /* eslint-disable no-unreachable */
     const existing = await prisma.recruitmentApplication.findUnique({
       where: { email_type: { email, type: 'TECH' } },
     });
@@ -109,13 +116,12 @@ export const submitTechApplication = async (
       taskSelection,
     } = req.body;
 
-    // ── Registration closed for AI domain ──
-    if (techDomain === 'AI') {
-      return next(
-        new AppError('Registration for the AI domain is closed.', 403)
-      );
-    }
+    // ── Registration closed for all Tech domains ──
+    return next(
+      new AppError('Registration for all Technical domains is closed.', 403)
+    );
 
+    /* eslint-disable no-unreachable */
     const userId = req.user?.id || null;
 
     const existing = await prisma.recruitmentApplication.findUnique({
